@@ -106,7 +106,6 @@ function swipeStep(s, st, behaviour) {
     assert(seenPhases.has(ph), `fas ${ph} saknas`);
   }
   assert(final.standings.every((s) => s.points >= 0));
-  assert(sawRescue, 'räddningspoängen användes aldrig');
   assert(lastTv && lastTv.qr && lastTv.qr.startsWith('data:image/png'), 'QR saknas på TV:n');
 
   // Poänglogik
@@ -131,6 +130,20 @@ function swipeStep(s, st, behaviour) {
   assert.strictEqual(S.narmastPoints(0, 400), 0);
   assert.deepStrictEqual(S.betLimits(1000, false), { min: 100, max: 1000 });
   assert.deepStrictEqual(S.betLimits(150, true), { min: 0, max: 150 });
+
+  // Räddning: den som står på noll får 50 poäng när det är dags att satsa.
+  const { Room } = require('../server/game');
+  const room = new Room('TEST', () => {});
+  const a = room.addOrRejoin({ name: 'A' }).player;
+  room.addOrRejoin({ name: 'B' });
+  room.plan = [{ type: 'ordning', items: [] }];
+  room.roundIndex = 0;
+  room.round = { type: 'ordning', spec: room.plan[0], bets: new Map(), answers: new Map(), next: new Set() };
+  a.points = 0;
+  room.startBet();
+  assert.strictEqual(a.points, 50, 'räddning ska ge 50 poäng');
+  assert(room.playerView(a).rescued, 'mobilen ska få veta om räddningen');
+  clearTimeout(room.timer);
 
   console.log('Allt ok ✔');
   tv.close();
