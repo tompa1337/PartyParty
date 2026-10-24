@@ -144,13 +144,13 @@
       maxBoundsViscosity: 0.8,
       worldCopyJump: false,
     });
-    map.getContainer().style.background = '#dfeaf3';
+    map.getContainer().style.background = '#16123a';
     map.setView([30, 10], 1);
-    L.polyline([[0, -180], [0, 180]], { color: '#b9cddd', weight: 1, dashArray: '4 6', interactive: false }).addTo(map);
+    L.polyline([[0, -180], [0, 180]], { color: '#3a3378', weight: 1, dashArray: '4 6', interactive: false }).addTo(map);
     loadWorld().then((geo) => {
       L.geoJSON(geo, {
         interactive: false,
-        style: { color: '#232a31', weight: 0.8, fillColor: '#ffffff', fillOpacity: 1 },
+        style: { color: '#7a6fd0', weight: 0.7, fillColor: '#2c2660', fillOpacity: 1 },
       }).addTo(map);
       if (opts.onReady) opts.onReady(map);
     });

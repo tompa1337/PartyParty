@@ -1,82 +1,105 @@
-@import url('/vendor/fonts/caveat/600.css');
-@import url('/vendor/fonts/caveat/700.css');
-@import url('/vendor/fonts/atkinson/400.css');
-@import url('/vendor/fonts/atkinson/700.css');
+@import url('/vendor/fonts/bricolage/index.css');
+@import url('/vendor/fonts/figtree/400.css');
+@import url('/vendor/fonts/figtree/600.css');
+@import url('/vendor/fonts/figtree/700.css');
 
-/* Rutat skrivhäfte: blårutigt papper, grafit, överstrykningspenna och rättningspenna. */
+/* Kvällsshow: nattblå studio, varm bärnsten som ljus, mint för rätt och korall för fel. */
 :root {
-  --paper: #f2f6f9;
-  --grid: #cfdde9;
-  --margin: #e9a1a6;
-  --ink: #232a31;
-  --ink-soft: #5b6670;
-  --marker: #ffe25a;
-  --marker-deep: #f5c400;
-  --red: #d2343c;
-  --green: #2c8a57;
-  --card: #ffffff;
-  --hand: 'Caveat', 'Comic Sans MS', cursive;
-  --text: 'Atkinson Hyperlegible', system-ui, sans-serif;
-  --cell: 28px;
+  --night: #15122e;
+  --night-2: #1b1739;
+  --panel: #221d47;
+  --panel-2: #2c2660;
+  --line: rgba(255, 255, 255, 0.09);
+  --text: #f5f1ff;
+  --soft: #a7a0d0;
+  --glow: #ffb547;
+  --glow-2: #ff8f3d;
+  --good: #4fe3b0;
+  --bad: #ff6b7a;
+  --violet: #8d7dff;
+  --display: 'Bricolage Grotesque Variable', 'Arial Rounded MT Bold', system-ui, sans-serif;
+  --body: 'Figtree', system-ui, sans-serif;
+  --radius: 18px;
 }
 
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
 body {
-  font-family: var(--text);
-  color: var(--ink);
-  background-color: var(--paper);
-  background-image:
-    linear-gradient(var(--grid) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
-  background-size: var(--cell) var(--cell);
+  font-family: var(--body);
+  color: var(--text);
+  background:
+    radial-gradient(ellipse 70% 55% at 45% 0%, rgba(141, 125, 255, 0.28), transparent 70%),
+    radial-gradient(ellipse 50% 40% at 90% 100%, rgba(255, 143, 61, 0.12), transparent 70%),
+    var(--night);
+  background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
 }
 
-h1, h2, h3, .hand { font-family: var(--hand); font-weight: 700; line-height: 1.05; margin: 0; }
+h1, h2, h3, .hand {
+  font-family: var(--display);
+  font-weight: 800;
+  font-variation-settings: 'wdth' 90;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
 
-/* Överstrykning: gul markering bakom texten, som med en överstrykningspenna. */
+/* Rubrikord som lyser i bärnsten. */
 .mark {
-  background: linear-gradient(transparent 38%, var(--marker) 38%, var(--marker) 88%, transparent 88%);
-  padding: 0 .12em;
-  box-decoration-break: clone;
-  -webkit-box-decoration-break: clone;
+  color: var(--glow);
+  text-shadow: 0 0 0.6em rgba(255, 181, 71, 0.35);
 }
 
 .sheet {
-  background: var(--card);
-  border: 1.5px solid var(--ink);
-  border-radius: 6px;
-  box-shadow: 4px 5px 0 rgba(35, 42, 49, .14);
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 10px 30px rgba(5, 3, 20, 0.35);
 }
 
 button, .btn {
   font: inherit;
   font-weight: 700;
-  color: var(--ink);
-  background: var(--marker);
-  border: 2px solid var(--ink);
-  border-radius: 10px;
-  padding: .8em 1.2em;
+  color: #22140a;
+  background: linear-gradient(180deg, #ffc566, var(--glow));
+  border: 0;
+  border-radius: 999px;
+  padding: .85em 1.3em;
   cursor: pointer;
-  box-shadow: 3px 3px 0 var(--ink);
-  transition: transform .08s, box-shadow .08s;
+  box-shadow: 0 6px 20px rgba(255, 181, 71, 0.25), inset 0 -2px 0 rgba(0, 0, 0, 0.12);
+  transition: transform .1s, box-shadow .1s, background .15s;
   touch-action: manipulation;
 }
-button:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
-button:focus-visible, input:focus-visible { outline: 3px solid var(--red); outline-offset: 3px; }
-button.quiet { background: var(--card); }
-button:disabled { opacity: .45; cursor: default; transform: none; box-shadow: 3px 3px 0 var(--ink); }
+button:active { transform: scale(0.97); }
+button:focus-visible, input:focus-visible { outline: 3px solid var(--violet); outline-offset: 3px; }
+button.quiet {
+  color: var(--text);
+  background: var(--panel-2);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+button:disabled { opacity: .4; cursor: default; transform: none; }
 
-.ok { color: var(--green); }
-.bad { color: var(--red); }
-.soft { color: var(--ink-soft); }
+.ok { color: var(--good); }
+.bad { color: var(--bad); }
+.soft { color: var(--soft); }
 
-.pts { font-family: var(--hand); font-weight: 700; font-variant-numeric: tabular-nums; }
+.pts {
+  font-family: var(--display);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
 
-/* Timer som en penna som ritar en linje. */
-.timer { height: 8px; background: rgba(35, 42, 49, .12); border-radius: 4px; overflow: hidden; }
-.timer > i { display: block; height: 100%; background: var(--ink); width: 100%; transform-origin: left; }
+/* Tidslinjen överst glöder och krymper. */
+.timer { height: 6px; background: rgba(255, 255, 255, 0.08); border-radius: 6px; overflow: hidden; }
+.timer > i {
+  display: block;
+  height: 100%;
+  width: 100%;
+  transform-origin: left;
+  background: linear-gradient(90deg, var(--glow-2), var(--glow));
+  box-shadow: 0 0 12px rgba(255, 181, 71, 0.6);
+}
 
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
@@ -87,7 +110,13 @@ button:disabled { opacity: .45; cursor: default; transform: none; box-shadow: 3p
 }
 .shake { animation: shake .45s; }
 
+/* Topplistans rader glider in en i taget, sista platsen först och vinnaren sist. */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .shake { animation: none; outline: 4px solid var(--red); }
-  * { transition: none !important; }
+  .shake { animation: none; outline: 3px solid var(--bad); }
+  *, *::before, *::after { transition: none !important; animation: none !important; }
 }

@@ -18,8 +18,8 @@ app.use('/vendor/leaflet', express.static(path.join(ROOT, 'node_modules/leaflet/
 app.use('/vendor/world', express.static(path.join(ROOT, 'node_modules/world-atlas'), { maxAge: '7d' }));
 app.use('/vendor/topojson', express.static(path.join(ROOT, 'node_modules/topojson-client/dist')));
 app.use('/vendor/sortable', express.static(path.join(ROOT, 'node_modules/sortablejs')));
-app.use('/vendor/fonts/caveat', express.static(path.join(ROOT, 'node_modules/@fontsource/caveat')));
-app.use('/vendor/fonts/atkinson', express.static(path.join(ROOT, 'node_modules/@fontsource/atkinson-hyperlegible')));
+app.use('/vendor/fonts/bricolage', express.static(path.join(ROOT, 'node_modules/@fontsource-variable/bricolage-grotesque')));
+app.use('/vendor/fonts/figtree', express.static(path.join(ROOT, 'node_modules/@fontsource/figtree')));
 app.get('/', (_req, res) => res.sendFile(path.join(ROOT, 'public/tv.html')));
 app.get('/spela', (_req, res) => res.sendFile(path.join(ROOT, 'public/play.html')));
 app.get('/health', (_req, res) => res.json({ ok: true, rooms: rooms.size }));

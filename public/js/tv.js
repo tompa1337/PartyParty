@@ -71,9 +71,9 @@
   }
 
   function statusMark(p, s) {
-    if (s.phase === 'lobby') return p.status === 'ready' ? '<span class="st done">✓</span>' : '<span class="st soft">…</span>';
+    const done = s.phase === 'lobby' ? p.status === 'ready' : p.status === 'done';
     if (!p.status) return '<span class="st"></span>';
-    return p.status === 'done' ? '<span class="st done">✓</span>' : '<span class="st soft">…</span>';
+    return done ? '<span class="st done" title="Klar"></span>' : '<span class="st">···</span>';
   }
 
   function renderRail(s) {
@@ -101,7 +101,7 @@
       case 'lobby':
         return buildLobby(s);
       case 'countdown':
-        stage.innerHTML = `<div class="big hand">Nu kör vi!</div>`;
+        stage.innerHTML = `<h1 class="big"><span class="mark">Nu kör vi!</span></h1>`;
         return;
       case 'warmup':
       case 'warmup-reveal':
@@ -142,7 +142,8 @@
     stage.innerHTML = `
       <div class="lobby">
         <div>
-          <h1><span class="mark">PartyParty</span></h1>
+          <h1>Party<span class="mark">Party</span></h1>
+          <p class="tag">Fredagskväll i soffan. Mobilen är din handkontroll.</p>
           <p class="how">Skanna koden med mobilen, eller gå till <strong>${esc(host)}</strong> och skriv rumskoden <b>${esc(s.code)}</b></p>
         </div>
         <div class="qr sheet">
@@ -174,6 +175,7 @@
     const seg = s.segment;
     stage.innerHTML = `
       <div class="intro">
+        <p class="kicker">Nästa del</p>
         <h1><span class="mark">${esc(seg.title)}</span></h1>
         <p class="n soft">${seg.count > 1 ? `${seg.count} omgångar` : 'En omgång'}. Satsa poäng före varje omgång.</p>
         <ul>${seg.rules.map((r) => `<li>${esc(r)}</li>`).join('')}</ul>
@@ -288,8 +290,8 @@
     const isFinal = res.type === 'final';
     const rows = res.rows
       .map(
-        (r) => `<tr>
-          <td class="pl1">${isFinal ? (r.detail && r.detail.right ? '<span class="ok">✓</span>' : '<span class="bad">✗</span>') : r.place}</td>
+        (r, i, all) => `<tr class="row ${!isFinal && r.place === 1 ? 'first' : ''}" style="animation-delay:${(all.length - 1 - i) * 0.18}s">
+          <td class="pl1">${isFinal ? (r.detail && r.detail.right ? '<span class="ok">✓</span>' : '<span class="bad">✗</span>') : `<span>${r.place}</span>`}</td>
           <td>${esc(r.emoji)} ${esc(r.name)}</td>
           <td class="ans">${answerText(s.round, r)}</td>
           <td class="n">${fmt(r.bet)}</td>
@@ -368,14 +370,14 @@
     const r = s.round;
     const target = [r.lat, r.lon];
     const pts = [target];
-    L.circleMarker(target, { radius: 11, color: '#232a31', weight: 3, fillColor: '#ffe25a', fillOpacity: 1 })
+    L.circleMarker(target, { radius: 11, color: '#ffe9c4', weight: 3, fillColor: '#ffb547', fillOpacity: 1 })
       .addTo(map)
       .bindTooltip('⭐ ' + r.name, { permanent: true, direction: 'top', className: 'pin-label', offset: [0, -10] });
     for (const row of s.results.rows) {
       if (!row.detail) continue;
       const p = [row.detail.lat, row.detail.lon];
       pts.push(p);
-      L.polyline([p, target], { color: '#d2343c', weight: 2, dashArray: '6 6' }).addTo(map);
+      L.polyline([p, target], { color: '#ff6b7a', weight: 2, dashArray: '6 6' }).addTo(map);
       L.marker(p, {
         icon: L.divIcon({ className: '', html: `<div style="font-size:28px;line-height:1">${esc(row.emoji)}</div>`, iconSize: [30, 30], iconAnchor: [15, 15] }),
       })
@@ -395,7 +397,7 @@
         ? `<div class="step p${i + 1}"><div class="em">${esc(p.emoji)}</div><div class="nm">${esc(p.name)}</div><div class="pts">${fmt(p.points)}</div><div class="block sheet">${i + 1}</div></div>`
         : '';
     stage.innerHTML = `
-      <h1 class="big" style="font-size:6rem;margin:0 0 1rem"><span class="mark">${st[0] ? esc(st[0].name) + ' vinner!' : 'Slut!'}</span></h1>
+      <h1 class="winner"><span class="mark">${st[0] ? esc(st[0].name) + ' vinner!' : 'Slut!'}</span></h1>
       <div class="podium">${step(st[1], 1)}${step(st[0], 0)}${step(st[2], 2)}</div>
       <div class="end-actions"><button id="again">Spela igen</button></div>`;
     $('#again').addEventListener('click', () => socket.emit('host:restart'));
