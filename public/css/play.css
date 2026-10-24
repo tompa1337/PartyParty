@@ -51,6 +51,7 @@ input.code { text-transform: uppercase; letter-spacing: .3em; font-family: var(-
 .emojis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
 .emojis button { font-size: 26px; padding: 6px 0; background: #fff; box-shadow: none; border-width: 1.5px; }
 .emojis button.on { background: var(--marker); box-shadow: 2px 2px 0 var(--ink); }
+.emojis button.taken { opacity: .25; filter: grayscale(1); background: transparent; }
 .err { color: var(--red); font-weight: 700; min-height: 1.2em; }
 
 .ready-btn { font-size: 30px; padding: 26px; font-family: var(--hand); }

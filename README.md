@@ -5,10 +5,10 @@ Ett partyspel för soffan. TV:n visar spelet, alla spelar med sin egen mobil och
 ## Så spelar man
 
 1. Öppna sidan på TV:n eller en dator kopplad till TV:n (eller casta fliken).
-2. Alla skannar QR-koden med mobilen, skriver sitt namn och trycker **Jag är redo**.
+2. Alla skannar QR-koden med mobilen, skriver sitt namn, väljer en figur (varje figur kan bara väljas av en spelare) och trycker **Jag är redo**.
 3. Spelet startar när alla är redo (minst 2, max 10 spelare).
 
-Alla börjar med **1 000 poäng**. Före varje omgång satsar man poäng (minst 10 % av det man har). Efter omgången rankas spelarna: bäst får satsningen ×2, sist får ×0 och övriga en jämn skala däremellan. Delad placering delar på multiplikatorerna.
+Alla börjar med **1 000 poäng**. Före varje omgång satsar man poäng (minst 10 % av det man har). Efter omgången rankas spelarna: bäst får satsningen ×2, sist får ×0,8 och övriga en jämn skala däremellan. Delad placering delar på multiplikatorerna. Efter varje omgång visar TV:n en topplista med allas svar, satsning och totalpoäng.
 
 Står man på 0 poäng när det är dags att satsa får man 50 poäng att spela med, så att ingen är utslagen resten av kvällen.
 

@@ -40,6 +40,7 @@
     clock.set(s.remainingMs, key);
     const timed = s.remainingMs != null && !['lobby', 'podium', 'countdown'].includes(s.phase);
     timerEl.classList.toggle('on', timed);
+    document.body.classList.toggle('wide', s.phase === 'reveal');
 
     renderTop(s);
     renderRail(s);
@@ -188,7 +189,7 @@
         ${
           isFinal
             ? `<p class="cat">Kategori <b><span class="mark">${esc(r.category)}</span></b></p><p class="sub">Satsa 0–200 poäng. Rätt svar ger poängen, fel svar tar dem.</p>`
-            : `<p class="cat">Bäst i omgången får satsningen gånger 2. Sist förlorar den.</p><p class="sub soft">Minst 10 % av dina poäng.</p>`
+            : `<p class="cat">Bäst i omgången får satsningen ×2. Sist får ×0,8.</p><p class="sub soft">Minst 10 % av dina poäng.</p>`
         }
       </div>`;
   }
@@ -260,6 +261,28 @@
     return `Tryck Nästa i mobilen (${done} av ${n})`;
   }
 
+  // Vad varje spelare svarade, i klartext för topplistan.
+  function answerText(round, row) {
+    const d = row.detail;
+    if (!d || (round.type === 'final' && d.choice == null)) return '<span class="soft">Inget svar</span>';
+    switch (round.type) {
+      case 'skiss':
+        return `${fmt(d.km)} km <span class="soft">· låst vid ${d.drawnPct} %</span>`;
+      case 'ordning': {
+        const exact = d.order.filter((id, i) => round.correct[i] && round.correct[i].id === id).length;
+        return `${exact} av 5 på rätt plats <span class="soft">· ${d.score} p</span>`;
+      }
+      case 'narmast':
+        return d.dist === 0 ? `${d.value} <span class="ok">exakt!</span>` : `${d.value} <span class="soft">· ${d.dist} fel</span>`;
+      case 'swipe':
+        return `${d.correct} rätt, ${d.wrong} fel${d.answered < 20 ? ` <span class="soft">· hann ${d.answered}</span>` : ''}`;
+      case 'final':
+        return `${'ABCD'[d.choice]}. ${esc(round.options[d.choice])}`;
+      default:
+        return '';
+    }
+  }
+
   function resultTable(s) {
     const res = s.results;
     const isFinal = res.type === 'final';
@@ -268,15 +291,17 @@
         (r) => `<tr>
           <td class="pl1">${isFinal ? (r.detail && r.detail.right ? '<span class="ok">✓</span>' : '<span class="bad">✗</span>') : r.place}</td>
           <td>${esc(r.emoji)} ${esc(r.name)}</td>
+          <td class="ans">${answerText(s.round, r)}</td>
           <td class="n">${fmt(r.bet)}</td>
           ${isFinal ? '' : `<td class="n">${mult(r.multiplier)}</td>`}
           <td class="d ${r.delta > 0 ? 'ok' : r.delta < 0 ? 'bad' : ''}">${signed(r.delta)}</td>
+          <td class="tot">${fmt(r.after)}</td>
         </tr>`
       )
       .join('');
     return `<div class="res sheet">
       <table>
-        <tr><th>${isFinal ? '' : 'Plats'}</th><th>Spelare</th><th>Satsat</th>${isFinal ? '' : '<th></th>'}<th style="text-align:right">Poäng</th></tr>
+        <tr><th>${isFinal ? '' : 'Plats'}</th><th>Spelare</th><th>Svar</th><th>Satsat</th>${isFinal ? '' : '<th></th>'}<th style="text-align:right">Poäng</th><th style="text-align:right">Totalt</th></tr>
         ${rows}
       </table>
       <div class="wait"><span>${waitText(s)}</span><button class="quiet" id="next">Nästa</button></div>
@@ -294,10 +319,7 @@
       left = `<h2>Rätt ordning</h2>
         <ol class="timeline">${r.correct
           .map((c) => `<li><span class="yr">${c.year}</span><span class="nm">${esc(c.name)}<span class="nt">${esc(c.note)}</span></span></li>`)
-          .join('')}</ol>
-        <p class="arrow-line">${s.results.rows
-          .map((x) => `${esc(x.emoji)} ${x.detail ? x.detail.score : 0} p`)
-          .join('&nbsp;&nbsp;&nbsp;')}</p>`;
+          .join('')}</ol>`;
     } else if (r.type === 'narmast') {
       const guesses = s.results.rows
         .filter((x) => x.detail)
@@ -309,19 +331,13 @@
     } else if (r.type === 'swipe') {
       const misses = (s.results.extra && s.results.extra.misses) || [];
       left = `<h2>Höger eller vänster</h2>
-        <div class="bars">${s.results.rows
-          .map(
-            (x) => `<div class="bar"><span class="em">${esc(x.emoji)}</span><span>${esc(x.name)}</span>
-            <span>${x.detail ? `<span class="ok">${x.detail.correct} rätt</span>, <span class="bad">${x.detail.wrong} fel</span>` : 'Hann inte'}</span>
-            <span class="pts">${x.detail ? x.detail.score : 0} p</span></div>`
-          )
-          .join('')}</div>
+        <p class="sub">${esc(r.left)} eller ${esc(r.right)}</p>
         ${
           misses.length
-            ? `<p class="fact">Lurigast: ${misses
+            ? `<p class="fact">Lurigast den här gången: ${misses
                 .map((m) => `<b>${esc(m.w)}</b> är ${m.side === 'L' ? esc(r.left).toLowerCase() : esc(r.right).toLowerCase()}`)
                 .join(', ')}.</p>`
-            : ''
+            : '<p class="fact">Ingen swipade fel!</p>'
         }`;
     } else if (r.type === 'final') {
       const who = (i) =>

@@ -111,6 +111,14 @@ io.on('connection', (socket) => {
     if (typeof ack === 'function') ack({ ok: true });
   });
 
+  // Mobilen frågar vilka figurer som redan är tagna innan man går med.
+  socket.on('room:peek', ({ code } = {}, ack) => {
+    if (typeof ack !== 'function') return;
+    const r = rooms.get(String(code || '').toUpperCase());
+    if (!r) return ack({ exists: false, taken: [] });
+    ack({ exists: true, taken: r.takenEmojis(), started: r.phase !== 'lobby' });
+  });
+
   // En spelare går med eller återansluter.
   socket.on('player:join', ({ code, name, emoji, playerId: pid } = {}, ack) => {
     const r = rooms.get(String(code || '').toUpperCase());

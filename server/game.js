@@ -129,10 +129,11 @@ class Room {
       p.connected = true;
       p.dropAt = null;
       if (name && this.phase === 'lobby') p.name = this.uniqueName(name, p.id);
-      if (emoji && this.phase === 'lobby') p.emoji = emoji;
+      if (emoji && this.phase === 'lobby' && !this.takenEmojis(p.id).includes(emoji)) p.emoji = emoji;
       return { player: p };
     }
     if (this.phase !== 'lobby') return { error: 'Spelet har redan startat. Vänta tills nästa omgång.' };
+    if (emoji && this.takenEmojis().includes(emoji)) return { error: 'Den figuren är redan tagen. Välj en annan.', emojiTaken: true };
     if (this.players.size >= 10) return { error: 'Rummet är fullt (max 10 spelare).' };
     const id = 'p' + Math.random().toString(36).slice(2, 10);
     p = {
@@ -146,6 +147,10 @@ class Room {
     };
     this.players.set(id, p);
     return { player: p };
+  }
+
+  takenEmojis(selfId) {
+    return [...this.players.values()].filter((p) => p.id !== selfId).map((p) => p.emoji);
   }
 
   uniqueName(name, selfId) {

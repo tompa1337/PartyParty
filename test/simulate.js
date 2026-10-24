@@ -13,13 +13,13 @@ const seenPhases = new Set();
 const seenTypes = new Set();
 let sawRescue = false;
 
-function bot(name, code, behaviour) {
+function bot(name, code, behaviour, emoji) {
   return new Promise((resolve, reject) => {
     const s = io(URL, { transports: ['websocket'] });
     let me = null;
     const done = new Set();
     s.on('connect', () => {
-      s.emit('player:join', { code, name, emoji: '🤖' }, (res) => {
+      s.emit('player:join', { code, name, emoji }, (res) => {
         if (res.error) return reject(new Error(res.error));
         me = res.playerId;
         s.emit('player:ready', { ready: true });
@@ -94,7 +94,7 @@ function swipeStep(s, st, behaviour) {
   tv.on('state', (st) => (lastTv = st));
   console.log('Rum', code);
 
-  const results = await Promise.all([bot('Anna', code, 'normal'), bot('Erik', code, 'allin'), bot('Sara', code, 'sleepy')]);
+  const results = await Promise.all([bot('Anna', code, 'normal', '🦊'), bot('Erik', code, 'allin', '🐼'), bot('Sara', code, 'sleepy', '🐸')]);
   const final = results[0];
   console.log('Faser:', [...seenPhases].join(', '));
   console.log('Segment:', [...seenTypes].join(', '));
@@ -115,13 +115,13 @@ function swipeStep(s, st, behaviour) {
     { id: 'b', perf: 50, tiebreak: 1, bet: 100 },
     { id: 'c', perf: 10, tiebreak: 1, bet: 100 },
   ]);
-  assert.deepStrictEqual(r.map((x) => x.delta), [100, 0, -100]);
+  assert.deepStrictEqual(r.map((x) => x.delta), [100, 40, -20]);
   const tie = S.rankAndPayout([
     { id: 'a', perf: 90, tiebreak: 1, bet: 300 },
     { id: 'b', perf: 90, tiebreak: 1, bet: 300 },
     { id: 'c', perf: 10, tiebreak: 1, bet: 300 },
   ]);
-  assert.deepStrictEqual(tie.map((x) => x.payout), [450, 450, 0]);
+  assert.deepStrictEqual(tie.map((x) => x.payout), [510, 510, 240]);
   assert.strictEqual(S.skissScore(5, 0.05), 100);
   assert.strictEqual(S.skissScore(5, 1), 40);
   assert.strictEqual(S.skissScore(2500, 0), 0);
@@ -134,8 +134,11 @@ function swipeStep(s, st, behaviour) {
   // Räddning: den som står på noll får 50 poäng när det är dags att satsa.
   const { Room } = require('../server/game');
   const room = new Room('TEST', () => {});
-  const a = room.addOrRejoin({ name: 'A' }).player;
-  room.addOrRejoin({ name: 'B' });
+  const a = room.addOrRejoin({ name: 'A', emoji: '🦊' }).player;
+  room.addOrRejoin({ name: 'B', emoji: '🐼' });
+  // Samma figur får inte väljas två gånger.
+  const dup = room.addOrRejoin({ name: 'C', emoji: a.emoji });
+  assert(dup.error && dup.emojiTaken, 'dubbel figur ska nekas');
   room.plan = [{ type: 'ordning', items: [] }];
   room.roundIndex = 0;
   room.round = { type: 'ordning', spec: room.plan[0], bets: new Map(), answers: new Map(), next: new Set() };

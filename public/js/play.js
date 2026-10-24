@@ -41,6 +41,7 @@
         }
         const e = $('#err');
         if (e) e.textContent = res.error;
+        if (res.emojiTaken && ui.refreshTaken) ui.refreshTaken();
         return;
       }
       joined = true;
@@ -62,12 +63,35 @@
       <div><label>Välj figur</label><div class="emojis">${EMOJIS.map((e) => `<button type="button" data-e="${e}" class="${e === emoji ? 'on' : ''}">${e}</button>`).join('')}</div></div>
       <p class="err" id="err"></p>
       <button class="full" id="go">Gå med</button>`;
-    app.querySelectorAll('.emojis button').forEach((b) =>
-      b.addEventListener('click', () => {
-        emoji = b.dataset.e;
-        app.querySelectorAll('.emojis button').forEach((x) => x.classList.toggle('on', x === b));
-      })
-    );
+    const buttons = [...app.querySelectorAll('.emojis button')];
+    const choose = (e) => {
+      emoji = e;
+      buttons.forEach((x) => x.classList.toggle('on', x.dataset.e === e));
+    };
+    buttons.forEach((b) => b.addEventListener('click', () => choose(b.dataset.e)));
+
+    // Figurer som någon annan redan valt går inte att välja.
+    const refreshTaken = () => {
+      const code = $('#code') && $('#code').value.trim().toUpperCase();
+      if (!code || code.length !== 4) return;
+      socket.emit('room:peek', { code }, (res) => {
+        if (screenKey !== 'join' || !res) return;
+        const taken = new Set(res.taken || []);
+        buttons.forEach((b) => {
+          b.disabled = taken.has(b.dataset.e);
+          b.classList.toggle('taken', taken.has(b.dataset.e));
+          b.setAttribute('aria-label', taken.has(b.dataset.e) ? `${b.dataset.e} är redan tagen` : `Välj ${b.dataset.e}`);
+        });
+        if (taken.has(emoji)) {
+          const free = EMOJIS.find((e) => !taken.has(e));
+          if (free) choose(free);
+        }
+      });
+    };
+    ui.refreshTaken = refreshTaken;
+    $('#code').addEventListener('input', refreshTaken);
+    refreshTaken();
+    const peek = setInterval(() => (screenKey === 'join' ? refreshTaken() : clearInterval(peek)), 3000);
     $('#go').addEventListener('click', () => {
       const code = $('#code').value.trim().toUpperCase();
       const name = $('#name').value.trim();
@@ -217,7 +241,7 @@
     const step = lim.max - lim.min > 200 ? 10 : 1;
     app.innerHTML = `
       <h1 class="title"><span class="mark">Satsa</span></h1>
-      ${isFinal ? `<p class="lead">Kategori: <b>${esc(r.category)}</b></p>` : `<p class="lead">${esc(s.segment.title)}. Bäst får satsningen ×2, sist förlorar den.</p>`}
+      ${isFinal ? `<p class="lead">Kategori: <b>${esc(r.category)}</b></p>` : `<p class="lead">${esc(s.segment.title)}. Bäst får satsningen ×2, sist får ×0,8.</p>`}
       ${s.rescued ? `<p class="lead"><span class="mark">Du stod på noll och fick ${fmt(s.me.points)} poäng att spela med.</span></p>` : ''}
       <div class="bet-amount pts" id="amt">${fmt(amount)}</div>
       <input type="range" id="rng" min="${lim.min}" max="${lim.max}" step="${step}" value="${amount}" aria-label="Satsning">

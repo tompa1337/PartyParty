@@ -58,10 +58,12 @@ function swipeScore(correct, finishedAll, secondsLeft) {
   return correct * 6 + bonus;
 }
 
-// Multiplikatorer från 2 (först) ner till 0 (sist), jämnt fördelade.
+// Multiplikatorer från 2 (först) ner till 0,8 (sist), jämnt fördelade.
+const MULT_TOP = 2;
+const MULT_BOTTOM = 0.8;
 function multipliers(n) {
   if (n <= 1) return [1];
-  return Array.from({ length: n }, (_, i) => (2 * (n - 1 - i)) / (n - 1));
+  return Array.from({ length: n }, (_, i) => MULT_BOTTOM + ((MULT_TOP - MULT_BOTTOM) * (n - 1 - i)) / (n - 1));
 }
 
 // entries: [{ id, perf, tiebreak, bet }]. Högre perf är bättre, lägre tiebreak är bättre.
