@@ -10,6 +10,8 @@ Ett partyspel för soffan. TV:n visar spelet, alla spelar med sin egen mobil och
 
 Alla börjar med **1 000 poäng**. Före varje omgång satsar man poäng (minst 10 % av det man har). Efter omgången rankas spelarna: bäst får satsningen ×2, sist får ×0 och övriga en jämn skala däremellan. Delad placering delar på multiplikatorerna.
 
+Står man på 0 poäng när det är dags att satsa får man 50 poäng att spela med, så att ingen är utslagen resten av kvällen.
+
 | Del | Omgångar | Vad man gör |
 | --- | --- | --- |
 | Uppvärmning | 1 | En fråga utan poäng, så att alla lär sig mobilen |
@@ -64,4 +66,4 @@ content/           frågor och skisser
 test/simulate.js   helt parti med botar
 ```
 
-Kartan använder kartbilder från CARTO och OpenStreetMap. De är gratis för mindre användning; vid större trafik behövs ett eget kartkonto.
+Världskartan ritas från [world-atlas](https://github.com/topojson/world-atlas) (Natural Earth, fri att använda) som följer med appen. Den behöver ingen nyckel och inget konto.

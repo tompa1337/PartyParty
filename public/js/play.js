@@ -218,6 +218,7 @@
     app.innerHTML = `
       <h1 class="title"><span class="mark">Satsa</span></h1>
       ${isFinal ? `<p class="lead">Kategori: <b>${esc(r.category)}</b></p>` : `<p class="lead">${esc(s.segment.title)}. Bäst får satsningen ×2, sist förlorar den.</p>`}
+      ${s.rescued ? `<p class="lead"><span class="mark">Du stod på noll och fick ${fmt(s.me.points)} poäng att spela med.</span></p>` : ''}
       <div class="bet-amount pts" id="amt">${fmt(amount)}</div>
       <input type="range" id="rng" min="${lim.min}" max="${lim.max}" step="${step}" value="${amount}" aria-label="Satsning">
       <div class="quick">
@@ -275,12 +276,7 @@
       <p class="lead" style="margin:0">Titta på TV:n. Var ligger platsen?</p>
       <div class="mapwrap"><div class="map" id="map"></div><div class="maphint" id="hint">Tryck på kartan för att sätta din nål</div></div>
       <button class="full" id="lock" disabled>Lås nålen</button>`;
-    const map = L.map('map', { worldCopyJump: true, zoomControl: true, attributionControl: true, minZoom: 1 }).setView([30, 10], 1);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-      attribution: '© OpenStreetMap © CARTO',
-      subdomains: 'abcd',
-      maxZoom: 18,
-    }).addTo(map);
+    const map = window.PP.worldMap('map');
     ui.map = map;
     let marker = null;
     let pos = null;

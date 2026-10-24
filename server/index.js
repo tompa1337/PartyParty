@@ -15,6 +15,8 @@ const io = new Server(server, { pingInterval: 10000, pingTimeout: 20000 });
 // ---------- statiska filer ----------
 app.use(express.static(path.join(ROOT, 'public'), { extensions: ['html'] }));
 app.use('/vendor/leaflet', express.static(path.join(ROOT, 'node_modules/leaflet/dist')));
+app.use('/vendor/world', express.static(path.join(ROOT, 'node_modules/world-atlas'), { maxAge: '7d' }));
+app.use('/vendor/topojson', express.static(path.join(ROOT, 'node_modules/topojson-client/dist')));
 app.use('/vendor/sortable', express.static(path.join(ROOT, 'node_modules/sortablejs')));
 app.use('/vendor/fonts/caveat', express.static(path.join(ROOT, 'node_modules/@fontsource/caveat')));
 app.use('/vendor/fonts/atkinson', express.static(path.join(ROOT, 'node_modules/@fontsource/atkinson-hyperlegible')));

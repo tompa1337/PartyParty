@@ -344,12 +344,12 @@
 
   function drawRevealMap(s) {
     const r = s.round;
-    map = L.map('map', { zoomControl: false, attributionControl: true, worldCopyJump: true });
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-      attribution: '© OpenStreetMap © CARTO',
-      subdomains: 'abcd',
-      maxZoom: 18,
-    }).addTo(map);
+    // Markeringarna läggs på när länderna är ritade, så att de hamnar ovanpå.
+    map = window.PP.worldMap('map', { zoomControl: false, onReady: (m) => addRevealMarks(m, s) });
+  }
+
+  function addRevealMarks(map, s) {
+    const r = s.round;
     const target = [r.lat, r.lon];
     const pts = [target];
     L.circleMarker(target, { radius: 11, color: '#232a31', weight: 3, fillColor: '#ffe25a', fillOpacity: 1 })

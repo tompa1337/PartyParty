@@ -11,6 +11,7 @@ const URL = `http://localhost:${process.env.PORT}`;
 const N = 3;
 const seenPhases = new Set();
 const seenTypes = new Set();
+let sawRescue = false;
 
 function bot(name, code, behaviour) {
   return new Promise((resolve, reject) => {
@@ -47,6 +48,10 @@ function bot(name, code, behaviour) {
         }
         setTimeout(() => s.emit('player:next'), 5);
       } else if (st.phase === 'bet' && st.betLimits) {
+        if (st.rescued) {
+          sawRescue = true;
+          assert.strictEqual(st.me.points, 50, 'räddning ska ge 50 poäng');
+        }
         done.add(key);
         const { min, max } = st.betLimits;
         const amt = behaviour === 'allin' ? max : min + Math.floor(Math.random() * (max - min + 1));
@@ -101,6 +106,7 @@ function swipeStep(s, st, behaviour) {
     assert(seenPhases.has(ph), `fas ${ph} saknas`);
   }
   assert(final.standings.every((s) => s.points >= 0));
+  assert(sawRescue, 'räddningspoängen användes aldrig');
   assert(lastTv && lastTv.qr && lastTv.qr.startsWith('data:image/png'), 'QR saknas på TV:n');
 
   // Poänglogik

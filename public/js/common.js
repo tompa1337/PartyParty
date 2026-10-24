@@ -99,9 +99,67 @@
     return { svg, setProgress };
   }
 
+  // Egen världskarta utan kartbilder från nätet: länderna ritas från en fil som följer med appen.
+  let worldPromise = null;
+  function loadWorld() {
+    if (!worldPromise) {
+      worldPromise = fetch('/vendor/world/countries-50m.json')
+        .then((r) => r.json())
+        .then((topo) => {
+          const geo = topojson.feature(topo, topo.objects.countries);
+          // Antarktis tas bort (inga platser där), och länder som korsar datumlinjen
+          // (Ryssland, Fiji) räknas om så att de inte ritar streck tvärs över kartan.
+          geo.features = geo.features.filter((f) => f.id !== '010' && f.geometry);
+          const unwrapRing = (ring) => {
+            let shift = 0;
+            return ring.map((pt, i) => {
+              if (i > 0) {
+                const prev = ring[i - 1][0];
+                if (pt[0] - prev > 180) shift -= 360;
+                else if (prev - pt[0] > 180) shift += 360;
+              }
+              return [pt[0] + shift, pt[1]];
+            });
+          };
+          for (const f of geo.features) {
+            const g = f.geometry;
+            if (g.type === 'Polygon') g.coordinates = g.coordinates.map(unwrapRing);
+            if (g.type === 'MultiPolygon') g.coordinates = g.coordinates.map((poly) => poly.map(unwrapRing));
+          }
+          return geo;
+        });
+    }
+    return worldPromise;
+  }
+
+  function worldMap(el, opts = {}) {
+    const map = L.map(el, {
+      preferCanvas: true,
+      zoomControl: opts.zoomControl !== false,
+      attributionControl: false,
+      minZoom: 1,
+      maxZoom: 9,
+      zoomSnap: 0.25,
+      maxBounds: [[-88, -200], [88, 200]],
+      maxBoundsViscosity: 0.8,
+      worldCopyJump: false,
+    });
+    map.getContainer().style.background = '#dfeaf3';
+    map.setView([30, 10], 1);
+    L.polyline([[0, -180], [0, 180]], { color: '#b9cddd', weight: 1, dashArray: '4 6', interactive: false }).addTo(map);
+    loadWorld().then((geo) => {
+      L.geoJSON(geo, {
+        interactive: false,
+        style: { color: '#232a31', weight: 0.8, fillColor: '#ffffff', fillOpacity: 1 },
+      }).addTo(map);
+      if (opts.onReady) opts.onReady(map);
+    });
+    return map;
+  }
+
   const fmt = (n) => Math.round(n).toLocaleString('sv-SE');
   const signed = (n) => (n > 0 ? '+' : n < 0 ? '−' : '±') + fmt(Math.abs(n));
   const mult = (m) => '×' + (Math.round(m * 100) / 100).toLocaleString('sv-SE');
 
-  window.PP = { esc, clock, createSketch, fmt, signed, mult };
+  window.PP = { esc, clock, createSketch, fmt, signed, mult, worldMap, loadWorld };
 })();

@@ -29,6 +29,7 @@ const DUR = {
 };
 
 const START_POINTS = 1000;
+const RESCUE_POINTS = 50;
 const SWIPE_WORDS_PER_SIDE = 10;
 
 const SEGMENTS = {
@@ -245,6 +246,14 @@ class Room {
   }
 
   startBet() {
+    // Den som står på noll får 50 poäng att spela med, så att ingen är utslagen resten av kvällen.
+    this.round.rescued = new Set();
+    for (const p of this.players.values()) {
+      if (p.points <= 0) {
+        p.points = RESCUE_POINTS;
+        this.round.rescued.add(p.id);
+      }
+    }
     this.setPhase('bet', T(DUR.bet), () => this.startPlay());
   }
 
@@ -623,6 +632,7 @@ class Room {
     if (this.phase === 'bet' || this.phase === 'segment-intro') {
       v.betLimits = S.betLimits(p.points, r.type === 'final');
       v.myBet = r.bets.has(p.id) ? r.bets.get(p.id) : null;
+      v.rescued = !!(r.rescued && r.rescued.has(p.id));
     } else if (r.bets.has(p.id)) {
       v.myBet = r.bets.get(p.id);
     }
