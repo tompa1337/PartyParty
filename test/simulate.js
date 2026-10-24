@@ -12,6 +12,8 @@ const N = 3;
 const seenPhases = new Set();
 const seenTypes = new Set();
 let sawRescue = false;
+const kingRounds = new Set();
+let sawVote = false;
 const ordningRounds = new Set();
 let betOutsideFinal = false;
 
@@ -75,6 +77,17 @@ function bot(name, code, behaviour, emoji) {
         if (t === 'ordning') s.emit('player:answer', { order: st.round.items.map((i) => i.id).reverse(), lock: true });
         if (t === 'narmast') s.emit('player:answer', { value: Math.floor(Math.random() * 1001), lock: true });
         if (t === 'final') s.emit('player:answer', { choice: Math.floor(Math.random() * 4) });
+        if (t === 'king') {
+          kingRounds.add(st.roundIndex);
+          // Kingen skriver "Näsa", övriga blandar exakt samma, en böjning och något annat.
+          const pickText = st.round.isKing ? 'Näsa' : ['näsan', 'Öga', 'mun', 'Ögonen'][Math.floor(Math.random() * 4)];
+          s.emit('player:answer', { text: pickText });
+        }
+      } else if (st.phase === 'vote' && st.round && st.round.candidates) {
+        done.add(key);
+        sawVote = true;
+        assert(!st.round.candidates.some((c) => /^n[aä]san?$/i.test(c.text)), 'exakta matchningar ska inte röstas om');
+        s.emit('player:vote', { yes: st.round.candidates.filter(() => Math.random() < 0.5).map((c) => c.id) });
       }
     });
     s.on('connect_error', reject);
@@ -106,12 +119,13 @@ function swipeStep(s, st, behaviour) {
   console.log('Slutställning:', final.standings.map((s) => `${s.name} ${s.points}`).join(' | '));
 
   assert.strictEqual(final.standings.length, N);
-  for (const t of ['skiss', 'ordning', 'narmast', 'swipe', 'final']) assert(seenTypes.has(t), `segment ${t} spelades inte`);
+  for (const t of ['skiss', 'ordning', 'narmast', 'swipe', 'king', 'final']) assert(seenTypes.has(t), `segment ${t} spelades inte`);
   for (const ph of ['countdown', 'warmup', 'warmup-reveal', 'segment-intro', 'round-ready', 'bet', 'play', 'reveal', 'podium']) {
     assert(seenPhases.has(ph), `fas ${ph} saknas`);
   }
   assert(final.standings.every((s) => s.points >= 0));
   assert.strictEqual(ordningRounds.size, 3, 'Ordningen ska ha tre omgångar');
+  assert.strictEqual(kingRounds.size, N, 'Kingen ska ha en omgång per spelare');
   assert(!betOutsideFinal, 'satsning ska bara finnas i finalen');
   assert(lastTv && lastTv.qr && lastTv.qr.startsWith('data:image/png'), 'QR saknas på TV:n');
 
@@ -169,6 +183,31 @@ function swipeStep(s, st, behaviour) {
   assert.strictEqual(a.points, 50, 'räddning ska ge 50 poäng');
   assert(room.playerView(a).rescued, 'mobilen ska få veta om räddningen');
   clearTimeout(room.timer);
+
+  // Kingen: kingen +100 per träff, träffar −100, övriga +100.
+  {
+    const kr = new Room('KING', () => {});
+    const k = kr.addOrRejoin({ name: 'K', emoji: '👑' }).player;
+    const x = kr.addOrRejoin({ name: 'X', emoji: '🐸' }).player;
+    const y = kr.addOrRejoin({ name: 'Y', emoji: '🐼' }).player;
+    const z = kr.addOrRejoin({ name: 'Z', emoji: '🦊' }).player;
+    kr.plan = [{ type: 'king', kingId: k.id, prompt: 'Något i ansiktet' }];
+    kr.roundIndex = 0;
+    kr.round = { type: 'king', spec: kr.plan[0], bets: new Map(), answers: new Map(), next: new Set(), votes: new Map() };
+    kr.phase = 'play';
+    kr.round.answers.set(k.id, { text: 'Glasögon', locked: true });
+    kr.round.answers.set(x.id, { text: 'glasögonen', locked: true }); // automatiskt samma
+    kr.round.answers.set(y.id, { text: 'brillor', locked: true }); // röstas till samma
+    kr.round.answers.set(z.id, { text: 'näsa', locked: true }); // röstas till annat
+    kr.endPlay();
+    assert.strictEqual(kr.phase, 'vote');
+    assert.deepStrictEqual(kr.round.candidates.map((c) => c.id).sort(), [y.id, z.id].sort());
+    for (const p of [k, x, y]) kr.vote(p.id, { yes: [y.id] });
+    kr.vote(z.id, { yes: [] });
+    const d = Object.fromEntries(kr.round.results.map((r) => [r.id, r.delta]));
+    assert.deepStrictEqual([d[k.id], d[x.id], d[y.id], d[z.id]], [200, -100, -100, 100]);
+    clearTimeout(kr.timer);
+  }
 
   console.log('Allt ok ✔');
   tv.close();

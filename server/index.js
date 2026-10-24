@@ -145,6 +145,7 @@ io.on('connection', (socket) => {
   socket.on('player:answer', forPlayer((d) => room.answer(playerId, d)));
   socket.on('player:swipe', forPlayer((d) => room.swipe(playerId, d)));
   socket.on('player:next', forPlayer(() => room.pressNext(playerId)));
+  socket.on('player:vote', forPlayer((d) => room.vote(playerId, d)));
 
   socket.on('disconnect', () => {
     if (!room) return;

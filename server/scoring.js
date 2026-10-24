@@ -118,6 +118,35 @@ function betLimits(points) {
   return { min: 0, max: Math.max(0, points) };
 }
 
+// Kingen: två svar räknas som samma automatiskt bara om de är lika efter att stora/små
+// bokstäver, prickar (å ä ö), skiljetecken och vanliga svenska ändelser tagits bort.
+// Allt annat avgörs av en omröstning.
+const SUFFIXES = ['arna', 'orna', 'erna', 'na', 'en', 'et', 'ar', 'er', 'or', 'n', 't', 'a', 'e'];
+function normAnswer(text) {
+  return String(text || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9 ]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+function stemWord(w) {
+  for (let round = 0; round < 2; round++) {
+    const suf = SUFFIXES.find((x) => w.endsWith(x) && w.length - x.length >= 3);
+    if (!suf) break;
+    w = w.slice(0, -suf.length);
+  }
+  return w;
+}
+function stemAnswer(text) {
+  return normAnswer(text).split(' ').filter(Boolean).map(stemWord).join(' ');
+}
+function answersMatch(a, b) {
+  const sa = stemAnswer(a);
+  return sa.length > 0 && sa === stemAnswer(b);
+}
+
 module.exports = {
   haversineKm,
   skissDistanceFactor,
@@ -131,5 +160,8 @@ module.exports = {
   placementPoints,
   finalPayout,
   betLimits,
+  normAnswer,
+  stemAnswer,
+  answersMatch,
   clamp,
 };

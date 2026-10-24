@@ -150,6 +150,8 @@
         return;
       case 'play':
         return buildPlay(s);
+      case 'vote':
+        return buildVote(s);
       case 'reveal':
         return buildReveal(s);
       case 'podium':
@@ -288,12 +290,71 @@
     if (r.type === 'narmast') return playNarmast(s);
     if (r.type === 'swipe') return playSwipe(s);
     if (r.type === 'final') return playFinal(s);
+    if (r.type === 'king') return playKing(s);
+  }
+
+  function playKing(s) {
+    const r = s.round;
+    app.innerHTML = `
+      ${
+        r.isKing
+          ? `<h1 class="title-sm"><span class="mark">👑 Du är kingen!</span></h1>
+             <p class="lead" style="margin:0">Skriv det du tror att någon annan också skriver. Du får <b class="ok">+100</b> för varje spelare som skriver samma.</p>`
+          : `<p class="lead" style="margin:0">Kingen är <b>👑 ${esc(r.kingEmoji)} ${esc(r.kingName)}</b></p>
+             <p class="soft" style="margin:0">Skriv något, men inte samma som kingen. Samma ger <b class="bad">−100</b>, annat ger <b class="ok">+100</b>.</p>`
+      }
+      <p class="king-prompt">${esc(r.prompt)}</p>
+      <input id="kt" type="text" maxlength="40" autocomplete="off" autocapitalize="sentences" enterkeyhint="send" placeholder="Skriv ditt svar">
+      <button class="full" id="send" style="margin-top:auto" disabled>Skicka</button>`;
+    const input = $('#kt');
+    const send = $('#send');
+    input.addEventListener('input', () => (send.disabled = !input.value.trim()));
+    const submit = () => {
+      const text = input.value.trim();
+      if (!text) return;
+      socket.emit('player:answer', { text });
+      waitingScreen('Skickat!', `Ditt svar: <b>${esc(text)}</b>. Väntar på de andra.`);
+    };
+    send.addEventListener('click', submit);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') submit();
+    });
+    input.focus();
+  }
+
+  // Kingen: rösta på vilka svar som betyder samma sak som kingens.
+  function buildVote(s) {
+    const r = s.round;
+    if (r.myVote) return waitingScreen('Röstat!', 'Väntar på de andra.');
+    const yes = new Set();
+    app.innerHTML = `
+      <p class="soft" style="margin:0">👑 ${esc(r.kingName)} skrev</p>
+      <h1 class="title"><span class="mark">${esc(r.kingText)}</span></h1>
+      <p class="lead" style="margin:0">Tryck på de svar som betyder samma sak.</p>
+      <div class="votes">${r.candidates
+        .map((c) => `<button class="vote" data-id="${esc(c.id)}"><span class="txt">${esc(c.text)}</span><span class="tag">Annat</span></button>`)
+        .join('')}</div>
+      <button class="full" id="done" style="margin-top:auto">Klar</button>`;
+    app.querySelectorAll('.vote').forEach((b) =>
+      b.addEventListener('click', () => {
+        const id = b.dataset.id;
+        if (yes.has(id)) yes.delete(id);
+        else yes.add(id);
+        b.classList.toggle('on', yes.has(id));
+        b.querySelector('.tag').textContent = yes.has(id) ? 'Samma' : 'Annat';
+      })
+    );
+    $('#done').addEventListener('click', () => {
+      socket.emit('player:vote', { yes: [...yes] });
+      waitingScreen('Röstat!', 'Väntar på de andra.');
+    });
   }
 
   function lockedScreen(r, a) {
     let txt = 'Väntar på de andra.';
     if (r.type === 'final') txt = `Du svarade ${'ABCD'[a.choice]}. Väntar på de andra.`;
     if (r.type === 'narmast') txt = `Ditt svar: ${a.value}. Väntar på de andra.`;
+    if (r.type === 'king') txt = `Ditt svar: <b>${esc(a.text)}</b>. Väntar på de andra.`;
     waitingScreen('Låst!', txt);
   }
 
@@ -517,6 +578,12 @@
       if (r.type === 'ordning') what = `${d.exact} av 5 på rätt plats.`;
       if (r.type === 'narmast') what = `Rätt svar: ${r.answer}. Du svarade ${d.value}.`;
       if (r.type === 'swipe') what = `${d.correct} rätt och ${d.wrong} fel.`;
+      if (r.type === 'king') {
+        if (d.verdict === 'king') what = `Du skrev <b>${esc(d.text || '–')}</b> och ${d.same} skrev samma.`;
+        else if (d.verdict === 'same') what = `Du skrev <b>${esc(d.text)}</b>, samma som kingens <b>${esc(r.kingText)}</b>.`;
+        else if (d.verdict === 'none') what = 'Inget svar den här gången.';
+        else what = `Du skrev <b>${esc(d.text)}</b>, inte samma som kingens <b>${esc(r.kingText || '–')}</b>.`;
+      }
       if (r.type === 'final') what = d.right ? `Rätt svar! Satsningen ×${String(Math.round(res.multiplier * 100) / 100).replace('.', ',')}.` : `Fel. Rätt svar var ${'ABCD'[r.correct]}. ${esc(r.options[r.correct])}.`;
     } else {
       what = r.type === 'final' ? `Inget svar. Rätt svar var ${esc(r.options[r.correct])}.` : 'Inget svar den här gången.';

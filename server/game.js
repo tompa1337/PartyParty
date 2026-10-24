@@ -8,6 +8,7 @@ const narmastQs = require('../content/narmast');
 const swipePairs = require('../content/swipe');
 const finalQs = require('../content/final');
 const warmups = require('../content/warmup');
+const kingPrompts = require('../content/king');
 
 const SCALE = Number(process.env.TIME_SCALE || 1);
 const T = (ms) => Math.round(ms * SCALE);
@@ -24,6 +25,8 @@ const DUR = {
   swipeCountdown: 3000,
   swipe: 30000,
   finalQuestion: 12000,
+  kingWrite: 45000,
+  kingVote: 30000,
   warmup: 20000,
   reveal: 30000,
   lobbyDropMs: 60000,
@@ -54,6 +57,14 @@ const SEGMENTS = {
   swipe: {
     title: 'Höger eller vänster',
     rules: ['20 ord på 30 sekunder', 'Flest rätt vinner, vid lika vinner den som var klar först', 'Fel svar skakar till och kostar en sekund'],
+  },
+  king: {
+    title: 'Kingen',
+    rules: [
+      'Alla blir kingen en gång',
+      'Kingen skriver det hen tror att någon annan också skriver',
+      'Kingen får +100 per spelare som skrev samma, de får −100. Alla andra får +100',
+    ],
   },
   final: {
     title: 'Finalen',
@@ -98,7 +109,7 @@ function pickInventionRounds(rounds, n) {
   return out;
 }
 
-function buildPlan() {
+function buildPlan(playerIds = []) {
   const plan = [];
   for (const lm of pick(landmarks, 3)) plan.push({ type: 'skiss', landmark: lm });
   for (const items of pickInventionRounds(3, 5)) plan.push({ type: 'ordning', items });
@@ -109,6 +120,9 @@ function buildPlan() {
     ...pick(pair.rightWords, SWIPE_WORDS_PER_SIDE).map((w) => ({ w, side: 'R' })),
   ]);
   plan.push({ type: 'swipe', pair, words });
+  // Kingen: en omgång per spelare, i slumpad ordning.
+  const prompts = pick(kingPrompts, playerIds.length);
+  shuffle(playerIds).forEach((kingId, i) => plan.push({ type: 'king', kingId, prompt: prompts[i % prompts.length] }));
   for (const q of pick(finalQs, 5)) plan.push({ type: 'final', q });
   return plan;
 }
@@ -228,7 +242,7 @@ class Room {
     }
     // Spelare som inte är anslutna när spelet startar tas bort.
     for (const p of [...this.players.values()]) if (!p.connected) this.players.delete(p.id);
-    this.plan = buildPlan();
+    this.plan = buildPlan([...this.players.keys()]);
     this.roundIndex = -1;
     this.lastResults = null;
     this.setPhase('countdown', T(DUR.countdown), () => this.startWarmup());
@@ -247,6 +261,14 @@ class Room {
   nextRound() {
     const prevType = this.roundIndex >= 0 ? this.plan[this.roundIndex].type : 'warmup';
     this.roundIndex++;
+    // En king som lämnat spelet hoppas över.
+    while (
+      this.roundIndex < this.plan.length &&
+      this.plan[this.roundIndex].type === 'king' &&
+      !(this.players.get(this.plan[this.roundIndex].kingId) || {}).connected
+    ) {
+      this.roundIndex++;
+    }
     if (this.roundIndex >= this.plan.length) return this.finish();
     const spec = this.plan[this.roundIndex];
     this.round = {
@@ -255,6 +277,7 @@ class Room {
       bets: new Map(),
       answers: new Map(),
       next: new Set(),
+      votes: new Map(),
       results: null,
     };
     if (spec.type !== prevType) {
@@ -330,6 +353,9 @@ class Room {
       case 'final':
         this.setPhase('play', T(DUR.finalQuestion), () => this.endPlay());
         break;
+      case 'king':
+        this.setPhase('play', T(DUR.kingWrite), () => this.endPlay());
+        break;
       default:
         this.endPlay();
     }
@@ -380,6 +406,12 @@ class Room {
         r.answers.set(playerId, { choice: c, at: now, locked: true });
         break;
       }
+      case 'king': {
+        const text = String(data.text || '').replace(/\s+/g, ' ').trim().slice(0, 40);
+        if (!text) return;
+        r.answers.set(playerId, { text, at: now, locked: true });
+        break;
+      }
       default:
         return;
     }
@@ -412,6 +444,39 @@ class Room {
     return { i, correct };
   }
 
+  // Kingen: varje spelare skickar listan med svar som hen tycker betyder samma som kingens.
+  vote(playerId, data) {
+    const r = this.round;
+    if (this.phase !== 'vote' || !r || r.type !== 'king' || !this.players.has(playerId)) return;
+    const allowed = new Set(r.candidates.map((c) => c.id));
+    const yes = Array.isArray(data && data.yes) ? data.yes.filter((x) => allowed.has(x)) : [];
+    r.votes.set(playerId, new Set(yes));
+    this.changed();
+    this.checkProgress();
+  }
+
+  startKingVote() {
+    const r = this.round;
+    const kingA = r.answers.get(r.spec.kingId);
+    r.candidates = [];
+    if (kingA) {
+      for (const [pid, a] of r.answers) {
+        if (pid === r.spec.kingId) continue;
+        if (!S.answersMatch(kingA.text, a.text)) r.candidates.push({ id: pid, text: a.text });
+      }
+    }
+    // Ingen omröstning behövs om alla svar redan är exakt samma eller helt saknas.
+    if (!r.candidates.length) {
+      r.voteDone = true;
+      return this.endPlay();
+    }
+    r.candidates = shuffle(r.candidates);
+    this.setPhase('vote', T(DUR.kingVote), () => {
+      r.voteDone = true;
+      this.endPlay();
+    });
+  }
+
   pressNext(playerId) {
     if (this.phase !== 'reveal' && this.phase !== 'warmup-reveal') return;
     this.round.next.add(playerId);
@@ -440,19 +505,26 @@ class Room {
         return this.endPlay();
       }
     }
+    if (this.phase === 'vote' && ps.every((p) => r.votes.has(p.id))) {
+      r.voteDone = true;
+      return this.endPlay();
+    }
     if (this.phase === 'reveal' && ps.every((p) => r.next.has(p.id))) return this.nextRound();
   }
 
   // ---------- resultat ----------
 
   endPlay() {
-    if (this.phase !== 'play') return;
+    if (this.phase !== 'play' && this.phase !== 'vote') return;
     const r = this.round;
+    if (r.type === 'king' && !r.voteDone) return this.startKingVote();
     const end = Date.now();
     const players = [...this.players.values()];
     let rows;
 
-    if (r.type === 'final') {
+    if (r.type === 'king') {
+      rows = this.kingResults(r, players);
+    } else if (r.type === 'final') {
       const correct = r.spec.q.correct;
       rows = S.finalPayout(
         players.map((p) => {
@@ -538,6 +610,41 @@ class Room {
     this.setPhase('reveal', T(DUR.reveal), () => this.nextRound());
   }
 
+  // Kingen: +100 per spelare som skrev samma. De som skrev samma får −100, alla andra +100.
+  kingResults(r, players) {
+    const kingId = r.spec.kingId;
+    const kingA = r.answers.get(kingId);
+    const voters = Math.max(1, this.connectedPlayers().length);
+    let same = 0;
+    const rows = [];
+    for (const p of players) {
+      if (p.id === kingId) continue;
+      const a = r.answers.get(p.id);
+      if (!a) {
+        rows.push({ id: p.id, bet: null, delta: 0, detail: { text: null, verdict: 'none' } });
+        continue;
+      }
+      let match = false;
+      let voted = null;
+      if (kingA) {
+        if (S.answersMatch(kingA.text, a.text)) match = true;
+        else {
+          const yes = [...r.votes.values()].filter((v) => v.has(p.id)).length;
+          voted = { yes, no: voters - yes };
+          match = yes > voters / 2;
+        }
+      }
+      if (match) same++;
+      rows.push({ id: p.id, bet: null, delta: match ? -100 : 100, detail: { text: a.text, verdict: match ? 'same' : 'different', voted } });
+    }
+    rows.push({ id: kingId, bet: null, delta: 100 * same, detail: { text: kingA ? kingA.text : null, verdict: 'king', same } });
+    // Placering efter vem som tjänade mest i omgången.
+    const ranked = S.rankGroups(rows.map((x) => ({ ...x, perf: x.delta, tiebreak: 0 })));
+    const out = [];
+    for (const g of ranked) for (const e of g.items) out.push({ ...e, place: g.from + 1 });
+    return out;
+  }
+
   revealExtra(r) {
     if (r.type !== 'swipe' || !r.misses) return null;
     // Orden som flest swipade fel på.
@@ -584,6 +691,8 @@ class Room {
         if (r.type === 'swipe') return a && a.finishedAt ? 'done' : 'waiting';
         return a && a.locked ? 'done' : 'waiting';
       }
+      case 'vote':
+        return r.votes.has(p.id) ? 'done' : 'waiting';
       case 'reveal':
       case 'warmup-reveal':
         return r.next.has(p.id) ? 'done' : 'waiting';
@@ -732,6 +841,20 @@ class Room {
           }
         }
         if (reveal) o.words = spec.words.map((x) => ({ w: x.w, side: x.side }));
+        return o;
+      }
+      case 'king': {
+        const k = this.players.get(spec.kingId) || { name: '?', emoji: '👑' };
+        const o = { type: 'king', kingId: spec.kingId, kingName: k.name, kingEmoji: k.emoji, prompt: spec.prompt };
+        if (p) o.isKing = p.id === spec.kingId;
+        if (this.phase === 'vote' || reveal) {
+          const ka = r.answers.get(spec.kingId);
+          o.kingText = ka ? ka.text : null;
+        }
+        if (this.phase === 'vote') {
+          o.candidates = r.candidates;
+          if (p) o.myVote = r.votes.has(p.id) ? [...r.votes.get(p.id)] : null;
+        }
         return o;
       }
       case 'final': {

@@ -115,6 +115,8 @@
         return;
       case 'play':
         return buildPlay(s);
+      case 'vote':
+        return buildVote(s);
       case 'reveal':
         return buildReveal(s);
       case 'podium':
@@ -128,6 +130,8 @@
     if (s.phase === 'lobby') return buildLobby(s);
     if (s.phase === 'warmup') return buildWarmup(s);
     if (s.phase === 'play' && s.round && s.round.type === 'swipe') return updateSwipe(s);
+    if (s.phase === 'play' && s.round && s.round.type === 'king') return buildPlay(s);
+    if (s.phase === 'vote') return buildVote(s);
     if (s.phase === 'reveal') {
       const w = stage.querySelector('.res .wait span');
       if (w) w.textContent = waitText(s);
@@ -221,6 +225,17 @@
         <div class="lr"><div class="side">← ${esc(r.left)}</div><div class="vs">eller</div><div class="side">${esc(r.right)} →</div></div>
         <div class="bars" id="bars"></div>`;
       updateSwipe(s);
+    } else if (r.type === 'king') {
+      const done = s.players.filter((p) => p.connected && p.status === 'done').length;
+      const n = s.players.filter((p) => p.connected).length;
+      stage.innerHTML = `
+        <p class="king-who"><span class="crown">👑</span> Kingen är <b>${esc(r.kingEmoji)} ${esc(r.kingName)}</b></p>
+        <p class="prompt">${esc(r.prompt)}</p>
+        <div class="king-rules">
+          <div class="sheet"><b>${esc(r.kingName)}</b> skriver det hen tror att någon annan också skriver. <span class="ok">+100</span> per träff.</div>
+          <div class="sheet"><b>Ni andra</b> skriver något, men inte samma som kingen. Samma ger <span class="bad">−100</span>, annat ger <span class="ok">+100</span>.</div>
+        </div>
+        <p class="sub">${done} av ${n} har skrivit</p>`;
     } else if (r.type === 'final') {
       stage.innerHTML = `
         <p class="sub">${esc(r.category)}</p>
@@ -228,6 +243,20 @@
         <div class="opts">${r.options.map((o, i) => `<div class="opt sheet"><span class="k">${'ABCD'[i]}</span>${esc(o)}</div>`).join('')}</div>
         <p class="sub"><span data-seconds></span> sekunder kvar</p>`;
     }
+  }
+
+  // Kingen: alla röstar om svar som inte är exakt samma som kingens.
+  function buildVote(s) {
+    const r = s.round;
+    if (!r) return;
+    const done = s.players.filter((p) => p.connected && p.status === 'done').length;
+    const n = s.players.filter((p) => p.connected).length;
+    stage.innerHTML = `
+      <p class="king-who"><span class="crown">👑</span> ${esc(r.kingName)} skrev</p>
+      <h1 class="king-answer"><span class="mark">${esc(r.kingText)}</span></h1>
+      <p class="prompt" style="font-size:2.4rem">Räknas något av de här som samma sak?</p>
+      <div class="cards">${r.candidates.map((c) => `<div class="card sheet">${esc(c.text)}</div>`).join('')}</div>
+      <p class="sub">Rösta i mobilen. Majoriteten avgör. ${done} av ${n} har röstat.</p>`;
   }
 
   function drawLoop() {
@@ -277,6 +306,12 @@
         return d.dist === 0 ? `${d.value} <span class="ok">exakt!</span>` : `${d.value} <span class="soft">· ${d.dist} fel</span>`;
       case 'swipe':
         return `${d.correct} rätt, ${d.wrong} fel${d.answered < 20 ? ` <span class="soft">· hann ${d.answered}</span>` : ''}`;
+      case 'king': {
+        if (d.verdict === 'king') return `<b>${esc(d.text || '–')}</b> <span class="soft">· 👑 kingen, ${d.same} träff${d.same === 1 ? '' : 'ar'}</span>`;
+        const vote = d.voted ? ` <span class="soft">· röstat ${d.voted.yes}–${d.voted.no}</span>` : '';
+        const tag = d.verdict === 'same' ? '<span class="bad">samma</span>' : '<span class="ok">annat</span>';
+        return `${esc(d.text)} <span class="soft">·</span> ${tag}${vote}`;
+      }
       case 'final':
         return `${'ABCD'[d.choice]}. ${esc(round.options[d.choice])} <span class="soft">· ${(d.ms / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })} s</span>`;
       default:
@@ -339,6 +374,10 @@
                 .join(', ')}.</p>`
             : '<p class="fact">Ingen swipade fel!</p>'
         }`;
+    } else if (r.type === 'king') {
+      left = `<p class="sub">${esc(r.prompt)}</p>
+        <p class="king-who"><span class="crown">👑</span> ${esc(r.kingEmoji)} ${esc(r.kingName)} skrev</p>
+        <h2><span class="mark">${esc(r.kingText || 'inget')}</span></h2>`;
     } else if (r.type === 'final') {
       const who = (i) =>
         s.results.rows

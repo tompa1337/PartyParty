@@ -192,3 +192,11 @@ body.tv.wide #rail { display: none; }
 .leaflet-bar a, .leaflet-bar a:hover { background: var(--panel-2); color: var(--text); border-color: var(--line); }
 
 .intro h1.round-h { font-size: 6.5rem; white-space: nowrap; }
+
+/* Kingen */
+.king-who { font-size: 1.8rem; color: var(--soft); margin: 0; }
+.king-who b { color: var(--text); }
+.king-who .crown { font-size: 2.4rem; margin-right: .3rem; filter: drop-shadow(0 0 10px rgba(255, 181, 71, 0.7)); }
+.king-rules { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; }
+.king-rules .sheet { padding: 1.2rem 1.4rem; font-size: 1.4rem; line-height: 1.45; }
+.king-answer { font-size: 6rem; letter-spacing: -0.03em; }

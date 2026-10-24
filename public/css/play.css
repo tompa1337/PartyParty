@@ -124,3 +124,11 @@ input[type='range'] { width: 100%; accent-color: var(--glow); height: 40px; }
 .fact-box { padding: 14px; text-align: center; }
 .fact-box b { display: block; font-family: var(--display); font-weight: 800; font-size: 34px; }
 .fact-box span { font-size: 14px; color: var(--soft); }
+
+/* Kingen */
+.king-prompt { font-family: var(--display); font-weight: 800; font-size: 32px; line-height: 1.1; letter-spacing: -0.02em; margin: 8px 0 0; }
+.votes { display: grid; gap: 10px; }
+.vote { display: flex; justify-content: space-between; align-items: center; text-align: left; font-size: 20px; padding: 16px 18px; color: var(--text); background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); border-radius: 16px; }
+.vote .tag { font-size: 14px; color: var(--soft); padding: 4px 10px; border-radius: 999px; background: rgba(255, 255, 255, 0.06); }
+.vote.on { box-shadow: inset 0 0 0 2px var(--glow); }
+.vote.on .tag { color: #22140a; background: var(--glow); }
