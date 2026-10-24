@@ -1,0 +1,387 @@
+(function () {
+  const { esc, clock, createSketch, fmt, signed, mult } = window.PP;
+  const socket = io();
+  const $ = (s) => document.querySelector(s);
+  const top = $('#top');
+  const stage = $('#stage');
+  const rail = $('#rail');
+  const timerEl = $('#timer');
+
+  let state = null;
+  let screenKey = null;
+  let sketch = null;
+  let drawStart = null;
+  let drawMs = null;
+  let map = null;
+
+  socket.on('connect', () => {
+    const saved = sessionStorage.getItem('pp-tv-room');
+    socket.emit('host:hello', { code: saved, origin: location.origin }, ({ code }) => {
+      sessionStorage.setItem('pp-tv-room', code);
+    });
+  });
+  socket.on('state', (s) => {
+    state = s;
+    render();
+  });
+
+  // Enter, mellanslag eller pil höger går vidare när det går, praktiskt med fjärrkontroll eller tangentbord.
+  document.addEventListener('keydown', (e) => {
+    if (['Enter', ' ', 'ArrowRight'].includes(e.key)) {
+      if (state && ['reveal', 'warmup-reveal', 'segment-intro'].includes(state.phase)) socket.emit('host:next');
+    }
+  });
+
+  const SEG_NAMES = { skiss: 'Skissen', ordning: 'Ordningen', narmast: 'Närmast vinner', swipe: 'Höger eller vänster', final: 'Finalen' };
+
+  function render() {
+    const s = state;
+    const key = `${s.phase}:${s.roundIndex}`;
+    clock.set(s.remainingMs, key);
+    const timed = s.remainingMs != null && !['lobby', 'podium', 'countdown'].includes(s.phase);
+    timerEl.classList.toggle('on', timed);
+
+    renderTop(s);
+    renderRail(s);
+
+    if (key !== screenKey) {
+      screenKey = key;
+      cleanup();
+      build(s);
+    } else {
+      update(s);
+    }
+  }
+
+  function cleanup() {
+    sketch = null;
+    drawStart = null;
+    if (map) {
+      map.remove();
+      map = null;
+    }
+  }
+
+  function renderTop(s) {
+    const seg = s.segment && s.phase !== 'lobby' && s.phase !== 'podium' && s.phase !== 'countdown'
+      ? `<span class="seg">${esc(s.segment.title)}${s.segment.count > 1 ? ` · ${s.segment.index} av ${s.segment.count}` : ''}</span>`
+      : '';
+    top.innerHTML = `<span class="logo">PartyParty</span>${seg}<span class="code">Rumskod <b>${esc(s.code)}</b></span>`;
+  }
+
+  function statusMark(p, s) {
+    if (s.phase === 'lobby') return p.status === 'ready' ? '<span class="st done">✓</span>' : '<span class="st soft">…</span>';
+    if (!p.status) return '<span class="st"></span>';
+    return p.status === 'done' ? '<span class="st done">✓</span>' : '<span class="st soft">…</span>';
+  }
+
+  function renderRail(s) {
+    const ps = [...s.players].sort((a, b) => (s.phase === 'lobby' ? 0 : b.points - a.points));
+    const title = s.phase === 'lobby' ? `Spelare (${ps.length})` : 'Ställning';
+    rail.innerHTML =
+      `<h3>${title}</h3>` +
+      (ps.length
+        ? ps
+            .map(
+              (p) => `<div class="pl sheet ${p.connected ? '' : 'off'}">
+          <span class="em">${esc(p.emoji)}</span>
+          <span class="nm">${esc(p.name)}</span>
+          <span class="pts">${s.phase === 'lobby' ? '' : fmt(p.points)}</span>
+          ${statusMark(p, s)}
+        </div>`
+            )
+            .join('')
+        : '<p class="soft">Ingen här än. Skanna koden med mobilen.</p>');
+  }
+
+  // ---------- bygg en ny skärm ----------
+  function build(s) {
+    switch (s.phase) {
+      case 'lobby':
+        return buildLobby(s);
+      case 'countdown':
+        stage.innerHTML = `<div class="big hand">Nu kör vi!</div>`;
+        return;
+      case 'warmup':
+      case 'warmup-reveal':
+        return buildWarmup(s);
+      case 'segment-intro':
+        return buildIntro(s);
+      case 'bet':
+        return buildBet(s);
+      case 'play':
+        return buildPlay(s);
+      case 'reveal':
+        return buildReveal(s);
+      case 'podium':
+        return buildPodium(s);
+      default:
+        stage.innerHTML = '';
+    }
+  }
+
+  function update(s) {
+    if (s.phase === 'lobby') return buildLobby(s);
+    if (s.phase === 'warmup') return buildWarmup(s);
+    if (s.phase === 'play' && s.round && s.round.type === 'swipe') return updateSwipe(s);
+    if (s.phase === 'reveal') {
+      const w = stage.querySelector('.res .wait span');
+      if (w) w.textContent = waitText(s);
+    }
+  }
+
+  function buildLobby(s) {
+    const n = s.players.filter((p) => p.connected).length;
+    const ready = s.players.filter((p) => p.connected && p.status === 'ready').length;
+    const host = s.joinUrl ? s.joinUrl.replace(/^https?:\/\//, '').replace(/\?.*$/, '') : '';
+    let hint;
+    if (n < 2) hint = 'Minst två spelare behövs. Spelet startar när alla har tryckt Redo.';
+    else if (ready < n) hint = `${ready} av ${n} är redo. Spelet startar när alla har tryckt Redo.`;
+    else hint = 'Alla är redo!';
+    stage.innerHTML = `
+      <div class="lobby">
+        <div>
+          <h1><span class="mark">PartyParty</span></h1>
+          <p class="how">Skanna koden med mobilen, eller gå till <strong>${esc(host)}</strong> och skriv rumskoden <b>${esc(s.code)}</b></p>
+        </div>
+        <div class="qr sheet">
+          ${s.qr ? `<img src="${s.qr}" alt="QR-kod för att gå med i spelet">` : ''}
+          <p>Gå med i spelet</p>
+        </div>
+        <p class="hint">${esc(hint)}</p>
+      </div>`;
+  }
+
+  function buildWarmup(s) {
+    const w = s.warmup;
+    if (!w) return;
+    const reveal = s.phase === 'warmup-reveal';
+    const answered = s.players.filter((p) => p.status === 'done').length;
+    stage.innerHTML = `
+      <p class="sub soft">Uppvärmning, inga poäng. Svara i mobilen.</p>
+      <p class="prompt">${esc(w.q)}</p>
+      <div class="opts">${w.options
+        .map(
+          (o, i) =>
+            `<div class="opt sheet ${reveal ? (i === w.correct ? 'right' : 'wrong') : ''}"><span class="k">${'ABCD'[i]}</span>${esc(o)}</div>`
+        )
+        .join('')}</div>
+      <p class="sub">${reveal ? 'Så enkelt är det! Tryck Nästa i mobilen när ni är redo.' : `${answered} av ${s.players.length} har svarat`}</p>`;
+  }
+
+  function buildIntro(s) {
+    const seg = s.segment;
+    stage.innerHTML = `
+      <div class="intro">
+        <h1><span class="mark">${esc(seg.title)}</span></h1>
+        <p class="n soft">${seg.count > 1 ? `${seg.count} omgångar` : 'En omgång'}. Satsa poäng före varje omgång.</p>
+        <ul>${seg.rules.map((r) => `<li>${esc(r)}</li>`).join('')}</ul>
+      </div>`;
+  }
+
+  function buildBet(s) {
+    const r = s.round || {};
+    const isFinal = r.type === 'final';
+    stage.innerHTML = `
+      <div class="betting">
+        <h1>Satsa!</h1>
+        ${
+          isFinal
+            ? `<p class="cat">Kategori <b><span class="mark">${esc(r.category)}</span></b></p><p class="sub">Satsa 0–200 poäng. Rätt svar ger poängen, fel svar tar dem.</p>`
+            : `<p class="cat">Bäst i omgången får satsningen gånger 2. Sist förlorar den.</p><p class="sub soft">Minst 10 % av dina poäng.</p>`
+        }
+      </div>`;
+  }
+
+  // ---------- spel ----------
+  function buildPlay(s) {
+    const r = s.round;
+    if (!r) return;
+    if (r.type === 'skiss') {
+      stage.innerHTML = `<div class="sketch-wrap sheet" id="sk"></div><p class="sub">Vad är det här? Sätt din nål på kartan i mobilen.</p>`;
+      sketch = createSketch($('#sk'), r.paths, r.transform);
+      drawMs = r.drawMs;
+      drawStart = performance.now() - r.drawElapsedMs;
+      requestAnimationFrame(drawLoop);
+    } else if (r.type === 'ordning') {
+      stage.innerHTML = `
+        <p class="prompt">Vilken kom först? Sortera från äldst till nyast i mobilen.</p>
+        <div class="cards">${r.items.map((i) => `<div class="card sheet">${esc(i.name)}</div>`).join('')}</div>`;
+    } else if (r.type === 'narmast') {
+      stage.innerHTML = `
+        <p class="prompt">${esc(r.q)}</p>
+        <div class="line">${ticks()}</div>
+        <p class="sub soft">Svaret ligger mellan 0 och 1000. Dra reglaget i mobilen och lås.</p>`;
+    } else if (r.type === 'swipe') {
+      stage.innerHTML = `
+        <div class="lr"><div class="side">← ${esc(r.left)}</div><div class="vs">eller</div><div class="side">${esc(r.right)} →</div></div>
+        <div class="bars" id="bars"></div>`;
+      updateSwipe(s);
+    } else if (r.type === 'final') {
+      stage.innerHTML = `
+        <p class="sub">${esc(r.category)}</p>
+        <p class="prompt">${esc(r.q)}</p>
+        <div class="opts">${r.options.map((o, i) => `<div class="opt sheet"><span class="k">${'ABCD'[i]}</span>${esc(o)}</div>`).join('')}</div>
+        <p class="sub"><span data-seconds></span> sekunder kvar</p>`;
+    }
+  }
+
+  function drawLoop() {
+    if (!sketch || drawStart == null) return;
+    sketch.setProgress((performance.now() - drawStart) / drawMs);
+    requestAnimationFrame(drawLoop);
+  }
+
+  function updateSwipe(s) {
+    const bars = $('#bars');
+    if (!bars || !s.round) return;
+    const total = s.round.total || 20;
+    const pr = s.round.progress || {};
+    const startIn = s.round.startInMs || 0;
+    bars.innerHTML =
+      (startIn > 0 ? `<p class="prompt hand" style="text-align:center">Gör er redo…</p>` : '') +
+      s.players
+        .map((p) => {
+          const x = pr[p.id] || { i: 0 };
+          return `<div class="bar"><span class="em">${esc(p.emoji)}</span><span>${esc(p.name)}</span>
+            <div class="track"><div class="fill" style="width:${(x.i / total) * 100}%"></div></div><span class="pts">${x.i}/${total}</span></div>`;
+        })
+        .join('');
+  }
+
+  function ticks() {
+    return [0, 250, 500, 750, 1000].map((v) => `<span class="tick" style="left:${v / 10}%">${v}</span>`).join('') + '<div class="axis"></div>';
+  }
+
+  // ---------- avslöjande ----------
+  function waitText(s) {
+    const done = s.players.filter((p) => p.connected && p.status === 'done').length;
+    const n = s.players.filter((p) => p.connected).length;
+    return `Tryck Nästa i mobilen (${done} av ${n})`;
+  }
+
+  function resultTable(s) {
+    const res = s.results;
+    const isFinal = res.type === 'final';
+    const rows = res.rows
+      .map(
+        (r) => `<tr>
+          <td class="pl1">${isFinal ? (r.detail && r.detail.right ? '<span class="ok">✓</span>' : '<span class="bad">✗</span>') : r.place}</td>
+          <td>${esc(r.emoji)} ${esc(r.name)}</td>
+          <td class="n">${fmt(r.bet)}</td>
+          ${isFinal ? '' : `<td class="n">${mult(r.multiplier)}</td>`}
+          <td class="d ${r.delta > 0 ? 'ok' : r.delta < 0 ? 'bad' : ''}">${signed(r.delta)}</td>
+        </tr>`
+      )
+      .join('');
+    return `<div class="res sheet">
+      <table>
+        <tr><th>${isFinal ? '' : 'Plats'}</th><th>Spelare</th><th>Satsat</th>${isFinal ? '' : '<th></th>'}<th style="text-align:right">Poäng</th></tr>
+        ${rows}
+      </table>
+      <div class="wait"><span>${waitText(s)}</span><button class="quiet" id="next">Nästa</button></div>
+    </div>`;
+  }
+
+  function buildReveal(s) {
+    const r = s.round;
+    let left = '';
+    if (r.type === 'skiss') {
+      left = `<h2><span class="mark">${esc(r.name)}</span></h2>
+        <p class="fact">${esc(r.place)}. ${esc(r.fact)}</p>
+        <div class="mapbox" id="map"></div>`;
+    } else if (r.type === 'ordning') {
+      left = `<h2>Rätt ordning</h2>
+        <ol class="timeline">${r.correct
+          .map((c) => `<li><span class="yr">${c.year}</span><span class="nm">${esc(c.name)}<span class="nt">${esc(c.note)}</span></span></li>`)
+          .join('')}</ol>
+        <p class="arrow-line">${s.results.rows
+          .map((x) => `${esc(x.emoji)} ${x.detail ? x.detail.score : 0} p`)
+          .join('&nbsp;&nbsp;&nbsp;')}</p>`;
+    } else if (r.type === 'narmast') {
+      const guesses = s.results.rows
+        .filter((x) => x.detail)
+        .map((x) => `<span class="guess" style="left:${x.detail.value / 10}%"><span class="em">${esc(x.emoji)}</span>${x.detail.value}</span>`)
+        .join('');
+      left = `<p class="sub">${esc(r.q)}</p>
+        <h2>${fmt(r.answer)} ${esc(r.unit)}</h2>
+        <div class="line">${ticks()}<span class="ans" style="left:${r.answer / 10}%"><b>${r.answer}</b></span>${guesses}</div>`;
+    } else if (r.type === 'swipe') {
+      const misses = (s.results.extra && s.results.extra.misses) || [];
+      left = `<h2>Höger eller vänster</h2>
+        <div class="bars">${s.results.rows
+          .map(
+            (x) => `<div class="bar"><span class="em">${esc(x.emoji)}</span><span>${esc(x.name)}</span>
+            <span>${x.detail ? `<span class="ok">${x.detail.correct} rätt</span>, <span class="bad">${x.detail.wrong} fel</span>` : 'Hann inte'}</span>
+            <span class="pts">${x.detail ? x.detail.score : 0} p</span></div>`
+          )
+          .join('')}</div>
+        ${
+          misses.length
+            ? `<p class="fact">Lurigast: ${misses
+                .map((m) => `<b>${esc(m.w)}</b> är ${m.side === 'L' ? esc(r.left).toLowerCase() : esc(r.right).toLowerCase()}`)
+                .join(', ')}.</p>`
+            : ''
+        }`;
+    } else if (r.type === 'final') {
+      const who = (i) =>
+        s.results.rows
+          .filter((x) => x.detail && x.detail.choice === i)
+          .map((x) => esc(x.emoji))
+          .join(' ');
+      left = `<p class="sub">${esc(r.category)}</p><p class="prompt">${esc(r.q)}</p>
+        <div class="opts">${r.options
+          .map(
+            (o, i) =>
+              `<div class="opt sheet ${i === r.correct ? 'right' : 'wrong'}"><span class="k">${'ABCD'[i]}</span>${esc(o)}<span class="who">${who(i)}</span></div>`
+          )
+          .join('')}</div>`;
+    }
+    stage.innerHTML = `<div class="reveal"><div class="left">${left}</div>${resultTable(s)}</div>`;
+    $('#next').addEventListener('click', () => socket.emit('host:next'));
+    if (r.type === 'skiss') drawRevealMap(s);
+  }
+
+  function drawRevealMap(s) {
+    const r = s.round;
+    map = L.map('map', { zoomControl: false, attributionControl: true, worldCopyJump: true });
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+      attribution: '© OpenStreetMap © CARTO',
+      subdomains: 'abcd',
+      maxZoom: 18,
+    }).addTo(map);
+    const target = [r.lat, r.lon];
+    const pts = [target];
+    L.circleMarker(target, { radius: 11, color: '#232a31', weight: 3, fillColor: '#ffe25a', fillOpacity: 1 })
+      .addTo(map)
+      .bindTooltip('⭐ ' + r.name, { permanent: true, direction: 'top', className: 'pin-label', offset: [0, -10] });
+    for (const row of s.results.rows) {
+      if (!row.detail) continue;
+      const p = [row.detail.lat, row.detail.lon];
+      pts.push(p);
+      L.polyline([p, target], { color: '#d2343c', weight: 2, dashArray: '6 6' }).addTo(map);
+      L.marker(p, {
+        icon: L.divIcon({ className: '', html: `<div style="font-size:28px;line-height:1">${esc(row.emoji)}</div>`, iconSize: [30, 30], iconAnchor: [15, 15] }),
+      })
+        .addTo(map)
+        .bindTooltip(`${esc(row.name)}: ${fmt(row.detail.km)} km`, { permanent: true, direction: 'right', className: 'pin-label', offset: [14, 0] });
+    }
+    setTimeout(() => {
+      map.invalidateSize();
+      map.fitBounds(L.latLngBounds(pts).pad(0.35), { maxZoom: 6 });
+    }, 50);
+  }
+
+  function buildPodium(s) {
+    const st = s.standings || [];
+    const step = (p, i) =>
+      p
+        ? `<div class="step p${i + 1}"><div class="em">${esc(p.emoji)}</div><div class="nm">${esc(p.name)}</div><div class="pts">${fmt(p.points)}</div><div class="block sheet">${i + 1}</div></div>`
+        : '';
+    stage.innerHTML = `
+      <h1 class="big" style="font-size:6rem;margin:0 0 1rem"><span class="mark">${st[0] ? esc(st[0].name) + ' vinner!' : 'Slut!'}</span></h1>
+      <div class="podium">${step(st[1], 1)}${step(st[0], 0)}${step(st[2], 2)}</div>
+      <div class="end-actions"><button id="again">Spela igen</button></div>`;
+    $('#again').addEventListener('click', () => socket.emit('host:restart'));
+  }
+})();

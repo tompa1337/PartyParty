@@ -1,0 +1,21 @@
+// Närmast vinner: alla svar ligger mellan 0 och 1000.
+module.exports = [
+  { id: 'burj', q: 'Hur många meter hög är Burj Khalifa i Dubai?', answer: 828, unit: 'meter' },
+  { id: 'kommuner', q: 'Hur många kommuner finns det i Sverige?', answer: 290, unit: 'kommuner' },
+  { id: 'ljud', q: 'Hur många meter per sekund färdas ljudet i luft (20 °C)?', answer: 343, unit: 'm/s' },
+  { id: 'mars', q: 'Hur många dygn tar det för Mars att gå ett varv runt solen?', answer: 687, unit: 'dygn' },
+  { id: 'skelett', q: 'Hur många ben har en vuxen människas skelett?', answer: 206, unit: 'ben' },
+  { id: 'fn', q: 'Hur många medlemsländer har FN?', answer: 193, unit: 'länder' },
+  { id: 'vattern', q: 'Hur många meter är Vättern som djupast?', answer: 128, unit: 'meter' },
+  { id: 'piano', q: 'Hur många tangenter har ett vanligt piano?', answer: 88, unit: 'tangenter' },
+  { id: 'torso', q: 'Hur många meter hög är Turning Torso i Malmö?', answer: 190, unit: 'meter' },
+  { id: 'fahrenheit', q: 'Vid hur många grader Fahrenheit kokar vatten?', answer: 212, unit: '°F' },
+  { id: 'eiffel', q: 'Hur många meter hög är Eiffeltornet, antennerna inräknade?', answer: 330, unit: 'meter' },
+  { id: 'oresund', q: 'Hur många meter höga är Öresundsbrons pyloner?', answer: 204, unit: 'meter' },
+  { id: 'globen', q: 'Hur många meter hög är Avicii Arena (Globen)?', answer: 85, unit: 'meter' },
+  { id: 'vasa', q: 'Hur många år var Gustav Vasa kung av Sverige?', answer: 37, unit: 'år' },
+  { id: 'gota', q: 'Hur många kilometer lång är Göta kanal?', answer: 190, unit: 'km' },
+  { id: 'astrid', q: 'Hur många år blev Astrid Lindgren?', answer: 94, unit: 'år' },
+  { id: 'vatten', q: 'Hur många kilo väger en kubikmeter vatten?', answer: 1000, unit: 'kg' },
+  { id: 'schack', q: 'Hur många rutor har ett schackbräde?', answer: 64, unit: 'rutor' },
+];

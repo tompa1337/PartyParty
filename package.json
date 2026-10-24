@@ -1,0 +1,38 @@
+{
+  "name": "partyparty",
+  "version": "1.0.0",
+  "description": "PartyParty – partyspel för soffan. TV:n visar, mobilerna svarar.",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "TIME_SCALE=0.5 node server/index.js",
+    "test": "node test/simulate.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tompa1337/partyparty.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/tompa1337/partyparty/issues"
+  },
+  "homepage": "https://github.com/tompa1337/partyparty#readme",
+  "dependencies": {
+    "@fontsource/atkinson-hyperlegible": "^5.3.0",
+    "@fontsource/caveat": "^5.3.0",
+    "express": "^5.3.0",
+    "leaflet": "^1.9.4",
+    "qrcode": "^1.5.4",
+    "socket.io": "^4.8.4",
+    "sortablejs": "^1.15.7"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.4"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "private": true
+}

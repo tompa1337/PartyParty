@@ -1,0 +1,119 @@
+body.phone {
+  font-size: 18px;
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  overscroll-behavior: none;
+}
+#me {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px 8px;
+  min-height: 52px;
+}
+#me .em { font-size: 28px; }
+#me .nm { font-weight: 700; }
+#me .pts { margin-left: auto; font-size: 32px; }
+#timer { margin: 0 16px; visibility: hidden; }
+#timer.on { visibility: visible; }
+
+#app {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  min-height: 0;
+}
+.grow { flex: 1; }
+.center { margin: auto 0; text-align: center; }
+.title { font-size: 46px; }
+.title-sm { font-size: 34px; }
+.lead { font-size: 20px; line-height: 1.4; }
+.full { width: 100%; font-size: 20px; padding: 16px; }
+.row { display: flex; gap: 10px; }
+.row > * { flex: 1; }
+
+label { font-weight: 700; display: block; margin-bottom: 6px; }
+input[type='text'] {
+  width: 100%;
+  font: inherit;
+  font-size: 22px;
+  padding: 12px 14px;
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ink);
+}
+input.code { text-transform: uppercase; letter-spacing: .3em; font-family: var(--hand); font-size: 34px; text-align: center; }
+.emojis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+.emojis button { font-size: 26px; padding: 6px 0; background: #fff; box-shadow: none; border-width: 1.5px; }
+.emojis button.on { background: var(--marker); box-shadow: 2px 2px 0 var(--ink); }
+.err { color: var(--red); font-weight: 700; min-height: 1.2em; }
+
+.ready-btn { font-size: 30px; padding: 26px; font-family: var(--hand); }
+.ready-btn.is-ready { background: #fff; }
+.others { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.chip { padding: 6px 10px; font-size: 16px; border-radius: 20px; }
+.chip.done { background: var(--marker); }
+
+.opts-phone { display: grid; gap: 12px; }
+.opts-phone button { text-align: left; font-size: 20px; padding: 16px; background: #fff; }
+.opts-phone button.picked { background: var(--marker); }
+.opts-phone button.right { background: var(--marker); }
+.opts-phone button.wrong { opacity: .5; }
+
+/* Satsning */
+.bet-amount { font-size: 72px; text-align: center; }
+input[type='range'] { width: 100%; accent-color: var(--ink); height: 40px; }
+.quick { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.quick button { padding: 10px 0; font-size: 16px; background: #fff; box-shadow: 2px 2px 0 var(--ink); }
+
+/* Karta */
+.mapwrap { flex: 1; min-height: 320px; border: 1.5px solid var(--ink); border-radius: 8px; overflow: hidden; position: relative; }
+.mapwrap .map { position: absolute; inset: 0; }
+.maphint { position: absolute; left: 10px; right: 10px; bottom: 26px; z-index: 500; background: #fff; border: 1.5px solid var(--ink); border-radius: 8px; padding: 6px 10px; font-size: 15px; text-align: center; pointer-events: none; }
+
+/* Ordningen */
+.sortlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.sortlist li { display: flex; align-items: center; gap: 12px; padding: 16px; font-size: 20px; font-weight: 700; touch-action: none; user-select: none; }
+.sortlist li .grip { color: var(--ink-soft); font-size: 22px; }
+.sortlist li .num { font-family: var(--hand); font-size: 30px; width: 24px; }
+.sortlist .ghosting { opacity: .3; }
+.sortlist .chosen { background: var(--marker); }
+.axis-label { display: flex; justify-content: space-between; color: var(--ink-soft); font-size: 15px; }
+
+/* Närmast vinner */
+.value { font-size: 88px; text-align: center; font-variant-numeric: tabular-nums; }
+.nudge { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.nudge button { background: #fff; padding: 12px 0; font-size: 18px; }
+
+/* Höger eller vänster */
+.swipe-area { flex: 1; position: relative; display: flex; align-items: center; justify-content: center; min-height: 300px; }
+.word-card {
+  width: 88%;
+  min-height: 190px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 34px;
+  font-weight: 700;
+  padding: 20px;
+  touch-action: none;
+  user-select: none;
+  will-change: transform;
+}
+.word-card.locked { background: #fde3e4; border-color: var(--red); }
+.sides { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.sides button { font-size: 20px; padding: 18px 8px; background: #fff; }
+.count { font-family: var(--hand); font-size: 28px; text-align: center; }
+
+/* Resultat */
+.result-big { font-size: 80px; text-align: center; }
+.facts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.fact-box { padding: 12px; text-align: center; }
+.fact-box b { display: block; font-family: var(--hand); font-size: 36px; }
+.fact-box span { font-size: 14px; color: var(--ink-soft); }
