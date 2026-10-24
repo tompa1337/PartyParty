@@ -271,10 +271,8 @@
     switch (round.type) {
       case 'skiss':
         return `${fmt(d.km)} km <span class="soft">· låst vid ${d.drawnPct} %</span>`;
-      case 'ordning': {
-        const exact = d.order.filter((id, i) => round.correct[i] && round.correct[i].id === id).length;
-        return `${exact} av 5 på rätt plats <span class="soft">· ${d.score} p</span>`;
-      }
+      case 'ordning':
+        return `${d.exact} av 5 på rätt plats`;
       case 'narmast':
         return d.dist === 0 ? `${d.value} <span class="ok">exakt!</span>` : `${d.value} <span class="soft">· ${d.dist} fel</span>`;
       case 'swipe':

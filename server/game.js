@@ -45,15 +45,15 @@ const SEGMENTS = {
   },
   ordning: {
     title: 'Ordningen',
-    rules: ['Fem uppfinningar per omgång', 'Dra dem i ordning från äldst till nyast', 'Flest på rätt plats vinner omgången'],
+    rules: ['Fem uppfinningar per omgång', 'Dra dem i ordning från äldst till nyast', 'Flest på rätt plats vinner, vid lika vinner den som var klar först'],
   },
   narmast: {
     title: 'Mellan 0–1000',
-    rules: ['Svaret ligger alltid mellan 0 och 1000', 'Dra reglaget och lås ditt svar', 'Närmast rätt svar vinner omgången'],
+    rules: ['Svaret ligger alltid mellan 0 och 1000', 'Dra reglaget och lås ditt svar', 'Närmast vinner, vid lika vinner den som låste först'],
   },
   swipe: {
     title: 'Höger eller vänster',
-    rules: ['20 ord på 30 sekunder', 'Swipa åt rätt kategori', 'Fel svar skakar till och kostar en sekund'],
+    rules: ['20 ord på 30 sekunder', 'Flest rätt vinner, vid lika vinner den som var klar först', 'Fel svar skakar till och kostar en sekund'],
   },
   final: {
     title: 'Finalen',
@@ -490,9 +490,11 @@ class Room {
           case 'ordning': {
             if (!a) return { ...base, perf: -1, tiebreak: Infinity, detail: null };
             const correctOrder = r.spec.items.map((i) => i.id);
-            const score = S.ordningScore(a.order, correctOrder);
+            const exact = a.order.filter((id, i) => id === correctOrder[i]).length;
+            const near = S.ordningScore(a.order, correctOrder);
             const at = a.locked ? a.at : end;
-            return { ...base, perf: score, tiebreak: at - r.playStart, detail: { order: a.order, score } };
+            // Flest på exakt rätt plats först, sedan flest nära, sist tiden.
+            return { ...base, perf: exact * 1000 + near, tiebreak: at - r.playStart, detail: { order: a.order, exact } };
           }
           case 'narmast': {
             if (!a) return { ...base, perf: -Infinity, tiebreak: Infinity, detail: null };
@@ -508,13 +510,12 @@ class Room {
           case 'swipe': {
             if (!a || a.i === 0) return { ...base, perf: -1, tiebreak: Infinity, detail: null };
             const finished = !!a.finishedAt;
-            const left = finished ? (r.swipeStart + r.swipeMs - a.finishedAt) / 1000 / SCALE : 0;
-            const score = S.swipeScore(a.correct, finished, left);
+            // Flest rätt vinner. Vid lika antal rätt vinner den som var klar först.
             return {
               ...base,
-              perf: score,
-              tiebreak: finished ? a.finishedAt - r.swipeStart : Infinity,
-              detail: { correct: a.correct, wrong: a.wrong, answered: a.i, score },
+              perf: a.correct,
+              tiebreak: finished ? a.finishedAt - r.swipeStart : r.swipeMs + 1,
+              detail: { correct: a.correct, wrong: a.wrong, answered: a.i, finished },
             };
           }
           default:

@@ -139,6 +139,12 @@ function swipeStep(s, st, behaviour) {
     { id: 'b', perf: 0, tiebreak: 2, bet: 100, right: false },
   ]);
   assert.deepStrictEqual(lone.map((x) => x.delta), [-100, -100]);
+  // Träffsäkerhet går alltid före snabbhet.
+  const acc = S.placementPoints([
+    { id: 'slowRight', perf: 15, tiebreak: 9000 },
+    { id: 'fastWrong', perf: 12, tiebreak: 100 },
+  ]);
+  assert.strictEqual(acc[0].id, 'slowRight', 'fler rätt ska slå snabbare');
   assert.strictEqual(S.skissScore(5, 0.05), 100);
   assert.strictEqual(S.skissScore(5, 1), 40);
   assert.strictEqual(S.skissScore(2500, 0), 0);

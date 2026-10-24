@@ -514,10 +514,7 @@
     if (res && res.detail) {
       const d = res.detail;
       if (r.type === 'skiss') what = `${esc(r.name)}. Du var ${fmt(d.km)} km bort.`;
-      if (r.type === 'ordning') {
-        const exact = d.order.filter((id, i) => r.correct[i] && r.correct[i].id === id).length;
-        what = `${exact} av 5 på rätt plats.`;
-      }
+      if (r.type === 'ordning') what = `${d.exact} av 5 på rätt plats.`;
       if (r.type === 'narmast') what = `Rätt svar: ${r.answer}. Du svarade ${d.value}.`;
       if (r.type === 'swipe') what = `${d.correct} rätt och ${d.wrong} fel.`;
       if (r.type === 'final') what = d.right ? `Rätt svar! Satsningen ×${String(Math.round(res.multiplier * 100) / 100).replace('.', ',')}.` : `Fel. Rätt svar var ${'ABCD'[r.correct]}. ${esc(r.options[r.correct])}.`;
