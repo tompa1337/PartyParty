@@ -14,6 +14,7 @@ const T = (ms) => Math.round(ms * SCALE);
 
 const DUR = {
   countdown: 3000,
+  roundReady: 3500,
   segmentIntro: 9000,
   bet: 20000,
   skissDraw: 45000,
@@ -28,7 +29,7 @@ const DUR = {
   lobbyDropMs: 60000,
 };
 
-const START_POINTS = 1000;
+const START_POINTS = 0;
 const RESCUE_POINTS = 50;
 const SWIPE_WORDS_PER_SIDE = 10;
 
@@ -44,11 +45,11 @@ const SEGMENTS = {
   },
   ordning: {
     title: 'Ordningen',
-    rules: ['Fem uppfinningar', 'Dra dem i ordning från äldst till nyast', '30 poäng för rätt plats, 15 för en plats fel'],
+    rules: ['Fem uppfinningar per omgång', 'Dra dem i ordning från äldst till nyast', 'Flest på rätt plats vinner omgången'],
   },
   narmast: {
-    title: 'Närmast vinner',
-    rules: ['Svaret ligger alltid mellan 0 och 1000', 'Dra reglaget och lås ditt svar', 'Närmast vinner'],
+    title: 'Mellan 0–1000',
+    rules: ['Svaret ligger alltid mellan 0 och 1000', 'Dra reglaget och lås ditt svar', 'Närmast rätt svar vinner omgången'],
   },
   swipe: {
     title: 'Höger eller vänster',
@@ -57,9 +58,9 @@ const SEGMENTS = {
   final: {
     title: 'Finalen',
     rules: [
-      'Fem frågor, du ser kategorin först',
-      'Satsa 0–200 poäng per fråga',
-      'Rätt svar ger poängen, fel svar tar dem',
+      'Fem frågor, du ser kategorin först och satsar sedan',
+      'Snabbast rätt svar får satsningen ×2, sist ×0',
+      'Fel svar förlorar hela satsningen',
     ],
   },
 };
@@ -74,20 +75,33 @@ const shuffle = (arr) => {
 };
 const pick = (arr, n) => shuffle(arr).slice(0, n);
 
-function pickInventions(n) {
+function pickInventions(n, pool = inventions) {
   // Fem uppfinningar med minst fem års mellanrum, så att facit är tydligt.
-  for (let attempt = 0; attempt < 200; attempt++) {
-    const chosen = pick(inventions, n).sort((a, b) => a.year - b.year);
+  for (let attempt = 0; attempt < 400; attempt++) {
+    const chosen = pick(pool, n).sort((a, b) => a.year - b.year);
     const ok = chosen.every((it, i) => i === 0 || it.year - chosen[i - 1].year >= 5);
     if (ok) return chosen;
   }
-  return pick(inventions, n).sort((a, b) => a.year - b.year);
+  return pick(pool, n).sort((a, b) => a.year - b.year);
+}
+
+// Flera omgångar Ordningen utan att samma uppfinning dyker upp två gånger.
+function pickInventionRounds(rounds, n) {
+  let pool = inventions;
+  const out = [];
+  for (let k = 0; k < rounds; k++) {
+    const set = pickInventions(n, pool);
+    out.push(set);
+    const used = new Set(set.map((i) => i.id));
+    pool = pool.filter((i) => !used.has(i.id));
+  }
+  return out;
 }
 
 function buildPlan() {
   const plan = [];
   for (const lm of pick(landmarks, 3)) plan.push({ type: 'skiss', landmark: lm });
-  plan.push({ type: 'ordning', items: pickInventions(5) });
+  for (const items of pickInventionRounds(3, 5)) plan.push({ type: 'ordning', items });
   for (const q of pick(narmastQs, 3)) plan.push({ type: 'narmast', q });
   const pair = pick(swipePairs, 1)[0];
   const words = shuffle([
@@ -244,10 +258,17 @@ class Room {
       results: null,
     };
     if (spec.type !== prevType) {
-      this.setPhase('segment-intro', T(DUR.segmentIntro), () => this.startBet());
+      this.setPhase('segment-intro', T(DUR.segmentIntro), () => this.startRound());
     } else {
-      this.startBet();
+      // En kort nedräkning mellan omgångar av samma del, så att alla hinner titta upp.
+      this.setPhase('round-ready', T(DUR.roundReady), () => this.startRound());
     }
+  }
+
+  // Satsning finns bara i finalen. Övriga omgångar startar direkt.
+  startRound() {
+    if (this.round.type === 'final') return this.startBet();
+    return this.startPlay();
   }
 
   startBet() {
@@ -265,7 +286,7 @@ class Room {
   placeBet(playerId, amount) {
     const p = this.players.get(playerId);
     if (!p || this.phase !== 'bet') return;
-    const lim = S.betLimits(p.points, this.round.type === 'final');
+    const lim = S.betLimits(p.points);
     const a = Math.round(Number(amount));
     if (!Number.isFinite(a)) return;
     this.round.bets.set(playerId, S.clamp(a, lim.min, lim.max));
@@ -275,13 +296,13 @@ class Room {
 
   betFor(p) {
     if (this.round.bets.has(p.id)) return this.round.bets.get(p.id);
-    return S.betLimits(p.points, this.round.type === 'final').min;
+    return S.betLimits(p.points).min;
   }
 
   startPlay() {
     const r = this.round;
-    // Den som inte hann satsa får minsta satsningen.
-    for (const p of this.players.values()) if (!r.bets.has(p.id)) r.bets.set(p.id, this.betFor(p));
+    // Den som inte hann satsa i finalen satsar 0.
+    if (r.type === 'final') for (const p of this.players.values()) if (!r.bets.has(p.id)) r.bets.set(p.id, this.betFor(p));
     const now = Date.now();
     r.playStart = now;
     switch (r.type) {
@@ -400,7 +421,7 @@ class Room {
 
   hostNext() {
     if (this.phase === 'reveal' || this.phase === 'warmup-reveal') return this.nextRound();
-    if (this.phase === 'segment-intro') return this.startBet();
+    if (this.phase === 'segment-intro' || this.phase === 'round-ready') return this.startRound();
   }
 
   // Går vidare direkt när alla anslutna är klara.
@@ -433,22 +454,25 @@ class Room {
 
     if (r.type === 'final') {
       const correct = r.spec.q.correct;
-      rows = players.map((p) => {
-        const a = r.answers.get(p.id);
-        const bet = r.bets.get(p.id) || 0;
-        const right = !!a && a.choice === correct;
-        return {
-          id: p.id,
-          bet,
-          delta: right ? bet : -bet,
-          detail: { choice: a ? a.choice : null, right },
-        };
-      });
+      rows = S.finalPayout(
+        players.map((p) => {
+          const a = r.answers.get(p.id);
+          const bet = r.bets.get(p.id) || 0;
+          const right = !!a && a.choice === correct;
+          return {
+            id: p.id,
+            bet,
+            right,
+            perf: right ? 1 : 0,
+            tiebreak: a ? a.at - r.playStart : Infinity,
+            detail: { choice: a ? a.choice : null, right, ms: a ? a.at - r.playStart : null },
+          };
+        })
+      );
     } else {
       const entries = players.map((p) => {
         const a = r.answers.get(p.id);
-        const bet = r.bets.get(p.id) || 0;
-        const base = { id: p.id, bet };
+        const base = { id: p.id, bet: null };
         switch (r.type) {
           case 'skiss': {
             if (!a) return { ...base, perf: -1, tiebreak: Infinity, detail: null };
@@ -497,7 +521,7 @@ class Room {
             return { ...base, perf: 0, tiebreak: 0, detail: null };
         }
       });
-      rows = S.rankAndPayout(entries);
+      rows = S.placementPoints(entries);
     }
 
     for (const row of rows) {
@@ -552,6 +576,8 @@ class Room {
         return r.answers.has(p.id) ? 'done' : 'waiting';
       case 'bet':
         return r.bets.has(p.id) ? 'done' : 'waiting';
+      case 'round-ready':
+        return null;
       case 'play': {
         const a = r.answers.get(p.id);
         if (r.type === 'swipe') return a && a.finishedAt ? 'done' : 'waiting';
@@ -634,8 +660,8 @@ class Room {
       return v;
     }
     v.round = this.roundPublic(r, false, p);
-    if (this.phase === 'bet' || this.phase === 'segment-intro') {
-      v.betLimits = S.betLimits(p.points, r.type === 'final');
+    if (r.type === 'final' && (this.phase === 'bet' || this.phase === 'segment-intro')) {
+      v.betLimits = S.betLimits(p.points);
       v.myBet = r.bets.has(p.id) ? r.bets.get(p.id) : null;
       v.rescued = !!(r.rescued && r.rescued.has(p.id));
     } else if (r.bets.has(p.id)) {
@@ -708,7 +734,7 @@ class Room {
         return o;
       }
       case 'final': {
-        const o = { type: 'final', category: spec.q.category, maxBet: 200 };
+        const o = { type: 'final', category: spec.q.category };
         if (this.phase === 'play' || reveal) {
           o.q = spec.q.q;
           o.options = spec.q.options;
@@ -736,7 +762,7 @@ class Room {
       after: row.after,
       detail: row.detail,
     }));
-    if (r.type === 'final') rows.sort((a, b) => b.delta - a.delta);
+    rows.sort((a, b) => (a.place || 99) - (b.place || 99));
     return { type: r.type, rows, extra };
   }
 }

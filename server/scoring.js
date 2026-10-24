@@ -58,49 +58,64 @@ function swipeScore(correct, finishedAll, secondsLeft) {
   return correct * 6 + bonus;
 }
 
-// Multiplikatorer från 2 (först) ner till 0,8 (sist), jämnt fördelade.
-const MULT_TOP = 2;
-const MULT_BOTTOM = 0.8;
-function multipliers(n) {
-  if (n <= 1) return [1];
-  return Array.from({ length: n }, (_, i) => MULT_BOTTOM + ((MULT_TOP - MULT_BOTTOM) * (n - 1 - i)) / (n - 1));
-}
-
-// entries: [{ id, perf, tiebreak, bet }]. Högre perf är bättre, lägre tiebreak är bättre.
-// Exakt lika (samma perf och tiebreak) delar på multiplikatorerna för sina platser.
-function rankAndPayout(entries) {
+// Sorterar spelarna. Högre perf är bättre, lägre tiebreak (tid) är bättre.
+// Exakt lika (samma perf och tiebreak) räknas som delad placering.
+function rankGroups(entries) {
   const sorted = [...entries].sort((a, b) => {
     if (b.perf !== a.perf) return b.perf - a.perf;
     return a.tiebreak - b.tiebreak;
   });
-  const mults = multipliers(sorted.length);
-  const out = [];
+  const groups = [];
   let i = 0;
   while (i < sorted.length) {
     let j = i;
-    while (
-      j + 1 < sorted.length &&
-      sorted[j + 1].perf === sorted[i].perf &&
-      sorted[j + 1].tiebreak === sorted[i].tiebreak
-    ) {
-      j++;
-    }
-    const share = mults.slice(i, j + 1).reduce((s, m) => s + m, 0) / (j - i + 1);
-    for (let k = i; k <= j; k++) {
-      const e = sorted[k];
-      const payout = Math.round(e.bet * share);
-      out.push({ ...e, place: i + 1, multiplier: share, payout, delta: payout - e.bet });
-    }
+    while (j + 1 < sorted.length && sorted[j + 1].perf === sorted[i].perf && sorted[j + 1].tiebreak === sorted[i].tiebreak) j++;
+    groups.push({ from: i, to: j, items: sorted.slice(i, j + 1) });
     i = j + 1;
+  }
+  return groups;
+}
+
+// Vanliga omgångar: sist får 100, varje plats uppåt ger 100 till.
+// Med 6 spelare blir det 600, 500, 400, 300, 200, 100. Delad placering delar på poängen.
+const PLACE_STEP = 100;
+function placementPoints(entries) {
+  const n = entries.length;
+  const pointsFor = (i) => (n - i) * PLACE_STEP;
+  const out = [];
+  for (const g of rankGroups(entries)) {
+    let sum = 0;
+    for (let k = g.from; k <= g.to; k++) sum += pointsFor(k);
+    const pts = Math.round(sum / g.items.length);
+    for (const e of g.items) out.push({ ...e, place: g.from + 1, delta: pts });
   }
   return out;
 }
 
-// Minsta satsning är 10 % av ens poäng (avrundat uppåt), högst allt man har.
-function betLimits(points, isFinal) {
-  if (isFinal) return { min: 0, max: Math.max(0, Math.min(200, points)) };
-  if (points <= 0) return { min: 0, max: 0 };
-  return { min: Math.ceil(points * 0.1), max: points };
+// Finalen: multiplikatorer från 2 (först) ner till 0 (sist), jämnt fördelade.
+function multipliers(n, top = 2, bottom = 0) {
+  if (n <= 1) return [top];
+  return Array.from({ length: n }, (_, i) => bottom + ((top - bottom) * (n - 1 - i)) / (n - 1));
+}
+
+// entries: [{ id, perf, tiebreak, bet, right }]. Fel svar ger alltid ×0.
+function finalPayout(entries) {
+  const mults = multipliers(entries.length);
+  const out = [];
+  for (const g of rankGroups(entries)) {
+    const share = mults.slice(g.from, g.to + 1).reduce((s, m) => s + m, 0) / g.items.length;
+    for (const e of g.items) {
+      const m = e.right ? share : 0;
+      const payout = Math.round(e.bet * m);
+      out.push({ ...e, place: g.from + 1, multiplier: m, payout, delta: payout - e.bet });
+    }
+  }
+  return out;
+}
+
+// I finalen satsar man 0 till allt man har.
+function betLimits(points) {
+  return { min: 0, max: Math.max(0, points) };
 }
 
 module.exports = {
@@ -112,7 +127,9 @@ module.exports = {
   narmastPoints,
   swipeScore,
   multipliers,
-  rankAndPayout,
+  rankGroups,
+  placementPoints,
+  finalPayout,
   betLimits,
   clamp,
 };

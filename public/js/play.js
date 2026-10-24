@@ -108,7 +108,7 @@
     if (!s || !s.me) return;
     const key = `${s.phase}:${s.roundIndex}`;
     clock.set(s.remainingMs, key);
-    timerEl.classList.toggle('on', s.remainingMs != null && !['lobby', 'podium', 'countdown', 'segment-intro'].includes(s.phase));
+    timerEl.classList.toggle('on', s.remainingMs != null && !['lobby', 'podium', 'countdown', 'segment-intro', 'round-ready'].includes(s.phase));
     meEl.innerHTML = `<span class="em">${esc(s.me.emoji)}</span><span class="nm">${esc(s.me.name)}</span>${
       s.phase === 'lobby' ? '' : `<span class="pts">${fmt(s.me.points)}</span>`
     }`;
@@ -141,10 +141,13 @@
         return buildWarmup(s);
       case 'segment-intro':
         app.innerHTML = `<div class="center"><p class="lead soft">Nästa del</p><h1 class="title"><span class="mark">${esc(s.segment.title)}</span></h1>
-          <p class="lead">${s.segment.rules.map(esc).join('. ')}.</p><p class="soft">Snart dags att satsa.</p></div>`;
+          <p class="lead">${s.segment.rules.map(esc).join('. ')}.</p><p class="soft">${s.segment.type === 'final' ? 'Snart dags att satsa.' : 'Snart börjar det. Titta på TV:n.'}</p></div>`;
         return;
       case 'bet':
         return buildBet(s);
+      case 'round-ready':
+        app.innerHTML = `<div class="center"><p class="lead soft">${esc(s.segment.title)}</p><h1 class="title"><span class="mark">Omgång ${s.segment.index} av ${s.segment.count}</span></h1><p class="lead">Titta på TV:n.</p></div>`;
+        return;
       case 'play':
         return buildPlay(s);
       case 'reveal':
@@ -236,20 +239,20 @@
     const r = s.round || {};
     const lim = s.betLimits || { min: 0, max: 0 };
     if (s.myBet != null) return waitingScreen(`Du satsade ${fmt(s.myBet)}`, 'Väntar på att de andra ska satsa.');
-    const isFinal = r.type === 'final';
-    let amount = isFinal ? Math.min(100, lim.max) : Math.max(lim.min, Math.round(lim.max * 0.25));
+    let amount = Math.round(lim.max * 0.25);
     const step = lim.max - lim.min > 200 ? 10 : 1;
     app.innerHTML = `
       <h1 class="title"><span class="mark">Satsa</span></h1>
-      ${isFinal ? `<p class="lead">Kategori: <b>${esc(r.category)}</b></p>` : `<p class="lead">${esc(s.segment.title)}. Bäst får satsningen ×2, sist får ×0,8.</p>`}
+      <p class="lead">Kategori: <b>${esc(r.category)}</b></p>
+      <p class="soft" style="margin:0">Snabbast rätt svar får ×2 och sist ×0. Fel svar förlorar satsningen.</p>
       ${s.rescued ? `<p class="lead"><span class="mark">Du stod på noll och fick ${fmt(s.me.points)} poäng att spela med.</span></p>` : ''}
       <div class="bet-amount pts" id="amt">${fmt(amount)}</div>
       <input type="range" id="rng" min="${lim.min}" max="${lim.max}" step="${step}" value="${amount}" aria-label="Satsning">
       <div class="quick">
-        <button data-q="min">${isFinal ? 'Inget' : 'Minst'}</button>
+        <button data-q="min">Inget</button>
         <button data-q="0.25">25 %</button>
         <button data-q="0.5">Hälften</button>
-        <button data-q="max">${isFinal ? 'Max' : 'Allt'}</button>
+        <button data-q="max">Allt</button>
       </div>
       <p class="soft">Du kan satsa ${fmt(lim.min)}–${fmt(lim.max)} poäng.</p>
       <button class="full" id="bet" style="margin-top:auto">Satsa ${fmt(amount)}</button>`;
@@ -511,22 +514,29 @@
     if (res && res.detail) {
       const d = res.detail;
       if (r.type === 'skiss') what = `${esc(r.name)}. Du var ${fmt(d.km)} km bort.`;
-      if (r.type === 'ordning') what = `${d.score} av 150 poäng i ordningen.`;
+      if (r.type === 'ordning') {
+        const exact = d.order.filter((id, i) => r.correct[i] && r.correct[i].id === id).length;
+        what = `${exact} av 5 på rätt plats.`;
+      }
       if (r.type === 'narmast') what = `Rätt svar: ${r.answer}. Du svarade ${d.value}.`;
       if (r.type === 'swipe') what = `${d.correct} rätt och ${d.wrong} fel.`;
-      if (r.type === 'final') what = d.right ? 'Rätt svar!' : `Fel. Rätt svar var ${'ABCD'[r.correct]}. ${esc(r.options[r.correct])}.`;
+      if (r.type === 'final') what = d.right ? `Rätt svar! Satsningen ×${String(Math.round(res.multiplier * 100) / 100).replace('.', ',')}.` : `Fel. Rätt svar var ${'ABCD'[r.correct]}. ${esc(r.options[r.correct])}.`;
     } else {
       what = r.type === 'final' ? `Inget svar. Rätt svar var ${esc(r.options[r.correct])}.` : 'Inget svar den här gången.';
     }
     const n = s.players.length;
     app.innerHTML = `
       <div class="center">
-        ${isFinal ? '' : `<p class="lead">Plats ${res ? res.place : n} av ${n}</p>`}
+        ${isFinal && !(res && res.detail && res.detail.right) ? '' : `<p class="lead">Plats ${res ? res.place : n} av ${n}</p>`}
         <div class="result-big pts ${res && res.delta > 0 ? 'ok' : res && res.delta < 0 ? 'bad' : ''}">${res ? signed(res.delta) : '±0'}</div>
         <p class="lead">${what}</p>
       </div>
       <div class="facts">
-        <div class="fact-box sheet"><b>${res ? fmt(res.bet) : 0}</b><span>satsat${isFinal ? '' : ` · ${res ? mult(res.multiplier) : ''}`}</span></div>
+        ${
+          isFinal
+            ? `<div class="fact-box sheet"><b>${res ? fmt(res.bet) : 0}</b><span>satsat · ${res ? mult(res.multiplier) : '×0'}</span></div>`
+            : `<div class="fact-box sheet"><b>${fmt(s.me.points)}</b><span>poäng totalt</span></div>`
+        }
         <div class="fact-box sheet"><b>${s.myPlace || '–'}</b><span>plats totalt</span></div>
       </div>
       <button class="full" id="next" style="margin-top:auto">Nästa</button>`;

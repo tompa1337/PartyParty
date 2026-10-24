@@ -12,6 +12,8 @@ const N = 3;
 const seenPhases = new Set();
 const seenTypes = new Set();
 let sawRescue = false;
+const ordningRounds = new Set();
+let betOutsideFinal = false;
 
 function bot(name, code, behaviour, emoji) {
   return new Promise((resolve, reject) => {
@@ -47,6 +49,8 @@ function bot(name, code, behaviour, emoji) {
           assert.strictEqual(st.myResult.after, st.me.points, 'poäng efter reveal stämmer inte');
         }
         setTimeout(() => s.emit('player:next'), 5);
+      } else if (st.phase === 'bet' && st.round && st.round.type !== 'final') {
+        betOutsideFinal = true;
       } else if (st.phase === 'bet' && st.betLimits) {
         if (st.rescued) {
           sawRescue = true;
@@ -59,6 +63,7 @@ function bot(name, code, behaviour, emoji) {
       } else if (st.phase === 'play' && st.round) {
         const t = st.round.type;
         seenTypes.add(t);
+        if (t === 'ordning') ordningRounds.add(st.roundIndex);
         if (t === 'swipe') {
           if (st.round.startInMs > 0) return; // vänta på nedräkningen
           done.add(key);
@@ -102,34 +107,45 @@ function swipeStep(s, st, behaviour) {
 
   assert.strictEqual(final.standings.length, N);
   for (const t of ['skiss', 'ordning', 'narmast', 'swipe', 'final']) assert(seenTypes.has(t), `segment ${t} spelades inte`);
-  for (const ph of ['countdown', 'warmup', 'warmup-reveal', 'segment-intro', 'bet', 'play', 'reveal', 'podium']) {
+  for (const ph of ['countdown', 'warmup', 'warmup-reveal', 'segment-intro', 'round-ready', 'bet', 'play', 'reveal', 'podium']) {
     assert(seenPhases.has(ph), `fas ${ph} saknas`);
   }
   assert(final.standings.every((s) => s.points >= 0));
+  assert.strictEqual(ordningRounds.size, 3, 'Ordningen ska ha tre omgångar');
+  assert(!betOutsideFinal, 'satsning ska bara finnas i finalen');
   assert(lastTv && lastTv.qr && lastTv.qr.startsWith('data:image/png'), 'QR saknas på TV:n');
 
   // Poänglogik
   const S = require('../server/scoring');
-  const r = S.rankAndPayout([
-    { id: 'a', perf: 90, tiebreak: 1, bet: 100 },
-    { id: 'b', perf: 50, tiebreak: 1, bet: 100 },
-    { id: 'c', perf: 10, tiebreak: 1, bet: 100 },
+  // Placeringspoäng: 6 spelare ger 600 ner till 100, delad plats delar på poängen.
+  const pp = S.placementPoints([1, 2, 3, 4, 5, 6].map((i) => ({ id: i, perf: i, tiebreak: 0 })));
+  assert.deepStrictEqual(pp.map((x) => x.delta), [600, 500, 400, 300, 200, 100]);
+  const ppTie = S.placementPoints([
+    { id: 'a', perf: 9, tiebreak: 1 },
+    { id: 'b', perf: 9, tiebreak: 1 },
+    { id: 'c', perf: 1, tiebreak: 1 },
   ]);
-  assert.deepStrictEqual(r.map((x) => x.delta), [100, 40, -20]);
-  const tie = S.rankAndPayout([
-    { id: 'a', perf: 90, tiebreak: 1, bet: 300 },
-    { id: 'b', perf: 90, tiebreak: 1, bet: 300 },
-    { id: 'c', perf: 10, tiebreak: 1, bet: 300 },
+  assert.deepStrictEqual(ppTie.map((x) => x.delta), [250, 250, 100]);
+  // Finalen: ×2 till ×0 bland rätt svar efter snabbhet, fel svar ×0.
+  const fp = S.finalPayout([
+    { id: 'a', perf: 1, tiebreak: 1, bet: 100, right: true },
+    { id: 'b', perf: 1, tiebreak: 2, bet: 100, right: true },
+    { id: 'c', perf: 1, tiebreak: 3, bet: 100, right: true },
+    { id: 'd', perf: 0, tiebreak: 1, bet: 100, right: false },
   ]);
-  assert.deepStrictEqual(tie.map((x) => x.payout), [510, 510, 240]);
+  assert.deepStrictEqual(fp.map((x) => x.delta), [100, 33, -33, -100]);
+  const lone = S.finalPayout([
+    { id: 'a', perf: 0, tiebreak: 1, bet: 100, right: false },
+    { id: 'b', perf: 0, tiebreak: 2, bet: 100, right: false },
+  ]);
+  assert.deepStrictEqual(lone.map((x) => x.delta), [-100, -100]);
   assert.strictEqual(S.skissScore(5, 0.05), 100);
   assert.strictEqual(S.skissScore(5, 1), 40);
   assert.strictEqual(S.skissScore(2500, 0), 0);
   assert.strictEqual(S.ordningScore(['a', 'b', 'c'], ['a', 'c', 'b']), 60);
   assert.strictEqual(S.narmastPoints(330, 335), 30);
   assert.strictEqual(S.narmastPoints(0, 400), 0);
-  assert.deepStrictEqual(S.betLimits(1000, false), { min: 100, max: 1000 });
-  assert.deepStrictEqual(S.betLimits(150, true), { min: 0, max: 150 });
+  assert.deepStrictEqual(S.betLimits(1000), { min: 0, max: 1000 });
 
   // Räddning: den som står på noll får 50 poäng när det är dags att satsa.
   const { Room } = require('../server/game');
@@ -139,9 +155,9 @@ function swipeStep(s, st, behaviour) {
   // Samma figur får inte väljas två gånger.
   const dup = room.addOrRejoin({ name: 'C', emoji: a.emoji });
   assert(dup.error && dup.emojiTaken, 'dubbel figur ska nekas');
-  room.plan = [{ type: 'ordning', items: [] }];
+  room.plan = [{ type: 'final', q: { category: 'Test', q: '?', options: ['a', 'b'], correct: 0 } }];
   room.roundIndex = 0;
-  room.round = { type: 'ordning', spec: room.plan[0], bets: new Map(), answers: new Map(), next: new Set() };
+  room.round = { type: 'final', spec: room.plan[0], bets: new Map(), answers: new Map(), next: new Set() };
   a.points = 0;
   room.startBet();
   assert.strictEqual(a.points, 50, 'räddning ska ge 50 poäng');

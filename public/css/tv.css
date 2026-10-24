@@ -190,3 +190,5 @@ body.tv.wide #rail { display: none; }
 /* Leaflet i mörkt */
 .leaflet-container { font-family: var(--body); }
 .leaflet-bar a, .leaflet-bar a:hover { background: var(--panel-2); color: var(--text); border-color: var(--line); }
+
+.intro h1.round-h { font-size: 6.5rem; white-space: nowrap; }

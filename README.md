@@ -8,18 +8,18 @@ Ett partyspel för soffan. TV:n visar spelet, alla spelar med sin egen mobil och
 2. Alla skannar QR-koden med mobilen, skriver sitt namn, väljer en figur (varje figur kan bara väljas av en spelare) och trycker **Jag är redo**.
 3. Spelet startar när alla är redo (minst 2, max 10 spelare).
 
-Alla börjar med **1 000 poäng**. Före varje omgång satsar man poäng (minst 10 % av det man har). Efter omgången rankas spelarna: bäst får satsningen ×2, sist får ×0,8 och övriga en jämn skala däremellan. Delad placering delar på multiplikatorerna. Efter varje omgång visar TV:n en topplista med allas svar, satsning och totalpoäng.
+Alla börjar på 0. I vanliga omgångar får man **placeringspoäng**: sist får 100 och varje plats uppåt ger 100 till. Med 6 spelare blir det 600, 500, 400, 300, 200 och 100. Delad placering delar på poängen. Efter varje omgång visar TV:n en topplista med allas svar och totalpoäng.
 
-Står man på 0 poäng när det är dags att satsa får man 50 poäng att spela med, så att ingen är utslagen resten av kvällen.
+I **finalen** satsar man före varje fråga, från 0 till allt man har. Alla rankas efter frågan, rätt svar först och sedan efter snabbhet. Etta får satsningen ×2 och sist ×0, med en jämn skala däremellan (med 6 spelare ×2, ×1,6, ×1,2, ×0,8, ×0,4, ×0). Fel svar förlorar alltid hela satsningen. Står man på 0 när det är dags att satsa får man 50 poäng att spela med.
 
 | Del | Omgångar | Vad man gör |
 | --- | --- | --- |
 | Uppvärmning | 1 | En fråga utan poäng, så att alla lär sig mobilen |
 | Skissen | 3 | En känd plats ritas upp streck för streck. Sätt en nål på världskartan. Poäng efter avstånd och hur tidigt man låste |
-| Ordningen | 1 | Sortera fem uppfinningar från äldst till nyast |
-| Närmast vinner | 3 | Svaret ligger alltid mellan 0 och 1000. Dra reglaget, närmast vinner |
+| Ordningen | 3 | Sortera fem uppfinningar från äldst till nyast |
+| Mellan 0–1000 | 3 | Svaret ligger alltid mellan 0 och 1000. Dra reglaget, närmast vinner |
 | Höger eller vänster | 1 | 20 ord på 30 sekunder. Swipa åt rätt kategori. Fel svar skakar och spärrar en sekund |
-| Finalen | 5 | Jeopardy-stil: se kategorin, satsa 0–200, rätt ger poängen och fel tar dem |
+| Finalen | 5 | Jeopardy-stil: se kategorin, satsa, svara snabbt och rätt |
 
 På TV:n går man vidare med **Enter**, mellanslag eller knappen Nästa. Annars går spelet vidare när alla tryckt Nästa i mobilen.
 

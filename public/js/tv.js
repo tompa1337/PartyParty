@@ -38,7 +38,7 @@
     const s = state;
     const key = `${s.phase}:${s.roundIndex}`;
     clock.set(s.remainingMs, key);
-    const timed = s.remainingMs != null && !['lobby', 'podium', 'countdown'].includes(s.phase);
+    const timed = s.remainingMs != null && !['lobby', 'podium', 'countdown', 'round-ready'].includes(s.phase);
     timerEl.classList.toggle('on', timed);
     document.body.classList.toggle('wide', s.phase === 'reveal');
 
@@ -110,6 +110,9 @@
         return buildIntro(s);
       case 'bet':
         return buildBet(s);
+      case 'round-ready':
+        stage.innerHTML = `<div class="intro"><p class="kicker">${esc(s.segment.title)}</p><h1 class="round-h"><span class="mark">Omgång ${s.segment.index} av ${s.segment.count}</span></h1></div>`;
+        return;
       case 'play':
         return buildPlay(s);
       case 'reveal':
@@ -177,22 +180,20 @@
       <div class="intro">
         <p class="kicker">Nästa del</p>
         <h1><span class="mark">${esc(seg.title)}</span></h1>
-        <p class="n soft">${seg.count > 1 ? `${seg.count} omgångar` : 'En omgång'}. Satsa poäng före varje omgång.</p>
+        <p class="n soft">${seg.count > 1 ? `${seg.count} omgångar` : 'En omgång'}. ${
+          seg.type === 'final' ? 'Satsa före varje fråga.' : `Etta får ${s.players.length * 100} poäng, sist får 100.`
+        }</p>
         <ul>${seg.rules.map((r) => `<li>${esc(r)}</li>`).join('')}</ul>
       </div>`;
   }
 
   function buildBet(s) {
     const r = s.round || {};
-    const isFinal = r.type === 'final';
     stage.innerHTML = `
       <div class="betting">
         <h1>Satsa!</h1>
-        ${
-          isFinal
-            ? `<p class="cat">Kategori <b><span class="mark">${esc(r.category)}</span></b></p><p class="sub">Satsa 0–200 poäng. Rätt svar ger poängen, fel svar tar dem.</p>`
-            : `<p class="cat">Bäst i omgången får satsningen ×2. Sist får ×0,8.</p><p class="sub soft">Minst 10 % av dina poäng.</p>`
-        }
+        <p class="cat">Kategori <b><span class="mark">${esc(r.category)}</span></b></p>
+        <p class="sub">Snabbast rätt svar får satsningen ×2 och sist ×0. Fel svar förlorar hela satsningen.</p>
       </div>`;
   }
 
@@ -279,7 +280,7 @@
       case 'swipe':
         return `${d.correct} rätt, ${d.wrong} fel${d.answered < 20 ? ` <span class="soft">· hann ${d.answered}</span>` : ''}`;
       case 'final':
-        return `${'ABCD'[d.choice]}. ${esc(round.options[d.choice])}`;
+        return `${'ABCD'[d.choice]}. ${esc(round.options[d.choice])} <span class="soft">· ${(d.ms / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })} s</span>`;
       default:
         return '';
     }
@@ -290,12 +291,11 @@
     const isFinal = res.type === 'final';
     const rows = res.rows
       .map(
-        (r, i, all) => `<tr class="row ${!isFinal && r.place === 1 ? 'first' : ''}" style="animation-delay:${(all.length - 1 - i) * 0.18}s">
-          <td class="pl1">${isFinal ? (r.detail && r.detail.right ? '<span class="ok">✓</span>' : '<span class="bad">✗</span>') : `<span>${r.place}</span>`}</td>
+        (r, i, all) => `<tr class="row ${r.place === 1 && (!isFinal || (r.detail && r.detail.right)) ? 'first' : ''}" style="animation-delay:${(all.length - 1 - i) * 0.18}s">
+          <td class="pl1">${isFinal && !(r.detail && r.detail.right) ? '<span class="bad">✗</span>' : `<span>${r.place}</span>`}</td>
           <td>${esc(r.emoji)} ${esc(r.name)}</td>
           <td class="ans">${answerText(s.round, r)}</td>
-          <td class="n">${fmt(r.bet)}</td>
-          ${isFinal ? '' : `<td class="n">${mult(r.multiplier)}</td>`}
+          ${isFinal ? `<td class="n">${fmt(r.bet)}</td><td class="n">${mult(r.multiplier)}</td>` : ''}
           <td class="d ${r.delta > 0 ? 'ok' : r.delta < 0 ? 'bad' : ''}">${signed(r.delta)}</td>
           <td class="tot">${fmt(r.after)}</td>
         </tr>`
@@ -303,7 +303,7 @@
       .join('');
     return `<div class="res sheet">
       <table>
-        <tr><th>${isFinal ? '' : 'Plats'}</th><th>Spelare</th><th>Svar</th><th>Satsat</th>${isFinal ? '' : '<th></th>'}<th style="text-align:right">Poäng</th><th style="text-align:right">Totalt</th></tr>
+        <tr><th>${isFinal ? '' : 'Plats'}</th><th>Spelare</th><th>Svar</th>${isFinal ? '<th>Satsat</th><th></th>' : ''}<th style="text-align:right">Poäng</th><th style="text-align:right">Totalt</th></tr>
         ${rows}
       </table>
       <div class="wait"><span>${waitText(s)}</span><button class="quiet" id="next">Nästa</button></div>
