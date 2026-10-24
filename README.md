@@ -18,6 +18,7 @@ I **finalen** satsar man före varje fråga, från 0 till allt man har. Alla ran
 | Skissen | 3 | En känd plats ritas upp streck för streck. Sätt en nål på världskartan. Poäng efter avstånd och hur tidigt man låste |
 | Ordningen | 3 | Sortera fem uppfinningar från äldst till nyast |
 | Mellan 0–1000 | 3 | Svaret ligger alltid mellan 0 och 1000. Dra reglaget, närmast vinner |
+| Pusslet | 1 | Klassiskt pussel med 9 rutor, en tom. Alla får samma bild och samma blandning. Snabbast löst vinner, hinner ingen vinner flest brickor på rätt plats |
 | Höger eller vänster | 1 | 20 ord på 30 sekunder. Flest rätt vinner. Fel svar skakar och spärrar en sekund |
 | Kingen | en per spelare | Alla blir kingen en gång. Kingen skriver det hen tror att någon annan skriver: +100 per träff. De som skrev samma får −100, alla andra +100. Svar som inte är exakt samma röstar alla om |
 | Finalen | 5 | Jeopardy-stil: se kategorin, satsa, svara snabbt och rätt |
@@ -55,6 +56,8 @@ Allt innehåll ligger i `content/` och är lätt att bygga ut:
 - `swipe.js`: kategoripar med ord
 - `final.js`: finalfrågor med kategori och fyra alternativ
 - `warmup.js`: uppvärmningsfrågor
+- `king.js`: uppmaningar till Kingen
+- `puzzles.js`: bilder till Pusslet, ritade som SVG i en ruta på 300 × 300
 
 ## Struktur
 

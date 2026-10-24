@@ -132,3 +132,13 @@ input[type='range'] { width: 100%; accent-color: var(--glow); height: 40px; }
 .vote .tag { font-size: 14px; color: var(--soft); padding: 4px 10px; border-radius: 999px; background: rgba(255, 255, 255, 0.06); }
 .vote.on { box-shadow: inset 0 0 0 2px var(--glow); }
 .vote.on .tag { color: #22140a; background: var(--glow); }
+
+/* Pusslet */
+.pz-head { display: flex; gap: 14px; align-items: center; }
+.pz-thumb { width: 76px; height: 76px; flex: none; border-radius: 12px; overflow: hidden; box-shadow: inset 0 0 0 1px var(--line); }
+.pz-thumb svg, .pz-full svg { display: block; width: 100%; height: 100%; }
+.pz { position: relative; width: 100%; aspect-ratio: 1; border-radius: 18px; background: rgba(0, 0, 0, 0.35); box-shadow: inset 0 0 0 1px var(--line); overflow: hidden; touch-action: none; user-select: none; }
+.pz-tile { position: absolute; left: 0; top: 0; width: calc(100% / 3); height: calc(100% / 3); padding: 2px; transition: transform .14s ease-out; cursor: pointer; }
+.pz-tile svg { display: block; width: 100%; height: 100%; border-radius: 10px; }
+.pz-tile.home svg { box-shadow: 0 0 0 2px rgba(79, 227, 176, 0.55); }
+.pz-full { width: 70%; margin: 18px auto; aspect-ratio: 1; border-radius: 18px; overflow: hidden; box-shadow: 0 0 40px rgba(255, 181, 71, 0.35); }

@@ -291,6 +291,72 @@
     if (r.type === 'swipe') return playSwipe(s);
     if (r.type === 'final') return playFinal(s);
     if (r.type === 'king') return playKing(s);
+    if (r.type === 'pussel') return playPussel(s);
+  }
+
+  // Pusslet: 3 × 3 brickor, en tom. Tryck eller dra en bricka bredvid den tomma rutan.
+  function playPussel(s) {
+    const r = s.round;
+    const mine = r.mine;
+    if (!mine) return waitingScreen('Pusslet', 'Titta på TV:n.');
+    if (mine.solved) return pusselDone(r, mine);
+    let board = [...mine.board];
+    let moves = mine.moves;
+    app.innerHTML = `
+      <div class="pz-head">
+        <div class="pz-thumb"><svg viewBox="0 0 300 300">${r.svg}</svg></div>
+        <div><p class="lead" style="margin:0"><b>Lägg ihop bilden</b></p><p class="soft" style="margin:4px 0 0">Tryck på en bricka bredvid den tomma rutan.</p></div>
+      </div>
+      <div class="pz" id="pz">${[0, 1, 2, 3, 4, 5, 6, 7]
+        .map(
+          (t) => `<div class="pz-tile" data-t="${t}"><svg viewBox="${(t % 3) * 100} ${Math.floor(t / 3) * 100} 100 100" preserveAspectRatio="none">${r.svg}</svg></div>`
+        )
+        .join('')}</div>
+      <p class="count" id="mv">0 drag</p>`;
+    const tiles = [...app.querySelectorAll('.pz-tile')];
+    const place = () => {
+      tiles.forEach((el) => {
+        const pos = board.indexOf(Number(el.dataset.t));
+        el.style.transform = `translate(${(pos % 3) * 100}%, ${Math.floor(pos / 3) * 100}%)`;
+        el.classList.toggle('home', pos === Number(el.dataset.t));
+      });
+      $('#mv').textContent = `${moves} drag`;
+    };
+    const adjacent = (a, b) => (Math.abs(a - b) === 3) || (Math.abs(a - b) === 1 && Math.floor(a / 3) === Math.floor(b / 3));
+    const tryMove = (t) => {
+      const pos = board.indexOf(t);
+      const blank = board.indexOf(8);
+      if (!adjacent(pos, blank)) return;
+      [board[pos], board[blank]] = [board[blank], board[pos]];
+      moves++;
+      place();
+      socket.emit('player:puzzle', { tile: t }, (res) => {
+        if (!res) return;
+        if (!res.ok && res.board) {
+          board = [...res.board];
+          place();
+        }
+        if (res.solved) {
+          if (navigator.vibrate) navigator.vibrate([60, 40, 120]);
+          ui.timeouts.push(setTimeout(() => pusselDone(r, { moves, ms: null, solved: true }), 450));
+        }
+      });
+    };
+    // Både tryck och dragning flyttar brickan, så länge den ligger bredvid den tomma rutan.
+    tiles.forEach((el) => {
+      el.addEventListener('pointerdown', (e) => el.setPointerCapture(e.pointerId));
+      el.addEventListener('pointerup', () => tryMove(Number(el.dataset.t)));
+    });
+    place();
+  }
+
+  function pusselDone(r, mine) {
+    app.innerHTML = `
+      <div class="center">
+        <h1 class="title-sm"><span class="mark">Löst!</span></h1>
+        <div class="pz-full"><svg viewBox="0 0 300 300">${r.svg}</svg></div>
+        <p class="lead">${mine.ms != null ? `${(mine.ms / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })} sekunder, ` : ''}${mine.moves} drag. Väntar på de andra.</p>
+      </div>`;
   }
 
   function playKing(s) {
@@ -578,6 +644,11 @@
       if (r.type === 'ordning') what = `${d.exact} av 5 på rätt plats.`;
       if (r.type === 'narmast') what = `Rätt svar: ${r.answer}. Du svarade ${d.value}.`;
       if (r.type === 'swipe') what = `${d.correct} rätt och ${d.wrong} fel.`;
+      if (r.type === 'pussel') {
+        what = d.solved
+          ? `Löst på ${(d.ms / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })} sekunder med ${d.moves} drag.`
+          : `${d.correct} av 8 brickor på rätt plats.`;
+      }
       if (r.type === 'king') {
         if (d.verdict === 'king') what = `Du skrev <b>${esc(d.text || '–')}</b> och ${d.same} skrev samma.`;
         else if (d.verdict === 'same') what = `Du skrev <b>${esc(d.text)}</b>, samma som kingens <b>${esc(r.kingText)}</b>.`;

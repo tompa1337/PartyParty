@@ -12,6 +12,7 @@ const N = 3;
 const seenPhases = new Set();
 const seenTypes = new Set();
 let sawRescue = false;
+let puzzleSolvedRows = 0;
 const kingRounds = new Set();
 let sawVote = false;
 const ordningRounds = new Set();
@@ -49,6 +50,7 @@ function bot(name, code, behaviour, emoji) {
         if (st.phase === 'reveal') {
           assert(st.myResult, 'myResult saknas i reveal');
           assert.strictEqual(st.myResult.after, st.me.points, 'poäng efter reveal stämmer inte');
+          if (st.round && st.round.type === 'pussel' && st.myResult.detail && st.myResult.detail.solved) puzzleSolvedRows++;
         }
         setTimeout(() => s.emit('player:next'), 5);
       } else if (st.phase === 'bet' && st.round && st.round.type !== 'final') {
@@ -77,6 +79,13 @@ function bot(name, code, behaviour, emoji) {
         if (t === 'ordning') s.emit('player:answer', { order: st.round.items.map((i) => i.id).reverse(), lock: true });
         if (t === 'narmast') s.emit('player:answer', { value: Math.floor(Math.random() * 1001), lock: true });
         if (t === 'final') s.emit('player:answer', { choice: Math.floor(Math.random() * 4) });
+        if (t === 'pussel') {
+          const board = st.round.mine.board;
+          const path = behaviour === 'sleepy' ? randomMoves(board, 6) : solvePuzzle(board);
+          (async () => {
+            for (const tile of path) await new Promise((res) => s.emit('player:puzzle', { tile }, res));
+          })();
+        }
         if (t === 'king') {
           kingRounds.add(st.roundIndex);
           // Kingen skriver "Näsa", övriga blandar exakt samma, en böjning och något annat.
@@ -92,6 +101,44 @@ function bot(name, code, behaviour, emoji) {
     });
     s.on('connect_error', reject);
   });
+}
+
+// Pusslet: kortaste lösningen med bredden-först-sökning (högst 181 440 lägen).
+const NB = (pos) => [pos - 3, pos + 3, pos % 3 ? pos - 1 : -1, pos % 3 < 2 ? pos + 1 : -1].filter((x) => x >= 0 && x < 9);
+function solvePuzzle(start) {
+  const goal = '012345678';
+  const key = start.join('');
+  const prev = new Map([[key, null]]);
+  const queue = [key];
+  for (let head = 0; head < queue.length; head++) {
+    const cur = queue[head];
+    if (cur === goal) break;
+    const b = cur.indexOf('8');
+    for (const n of NB(b)) {
+      const arr = cur.split('');
+      [arr[b], arr[n]] = [arr[n], arr[b]];
+      const k = arr.join('');
+      if (!prev.has(k)) {
+        prev.set(k, { from: cur, tile: Number(cur[n]) });
+        queue.push(k);
+      }
+    }
+  }
+  const tiles = [];
+  for (let k = goal; prev.get(k); k = prev.get(k).from) tiles.unshift(prev.get(k).tile);
+  return tiles;
+}
+function randomMoves(start, n) {
+  const b = [...start];
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const blank = b.indexOf(8);
+    const opts = NB(blank);
+    const pos = opts[Math.floor(Math.random() * opts.length)];
+    out.push(b[pos]);
+    [b[blank], b[pos]] = [b[pos], b[blank]];
+  }
+  return out;
 }
 
 const swiping = new WeakMap();
@@ -119,7 +166,7 @@ function swipeStep(s, st, behaviour) {
   console.log('Slutställning:', final.standings.map((s) => `${s.name} ${s.points}`).join(' | '));
 
   assert.strictEqual(final.standings.length, N);
-  for (const t of ['skiss', 'ordning', 'narmast', 'swipe', 'king', 'final']) assert(seenTypes.has(t), `segment ${t} spelades inte`);
+  for (const t of ['skiss', 'ordning', 'narmast', 'pussel', 'swipe', 'king', 'final']) assert(seenTypes.has(t), `segment ${t} spelades inte`);
   for (const ph of ['countdown', 'warmup', 'warmup-reveal', 'segment-intro', 'round-ready', 'bet', 'play', 'reveal', 'podium']) {
     assert(seenPhases.has(ph), `fas ${ph} saknas`);
   }
@@ -183,6 +230,23 @@ function swipeStep(s, st, behaviour) {
   assert.strictEqual(a.points, 50, 'räddning ska ge 50 poäng');
   assert(room.playerView(a).rescued, 'mobilen ska få veta om räddningen');
   clearTimeout(room.timer);
+
+  // Pusslet: blandningen ska alltid gå att lösa och en löst bricka-följd ska ge löst bräde.
+  {
+    const { scramble, correctTiles } = require('../server/game');
+    for (let i = 0; i < 20; i++) {
+      const b = scramble();
+      const path = solvePuzzle(b);
+      const bb = [...b];
+      for (const t of path) {
+        const p = bb.indexOf(t);
+        const bl = bb.indexOf(8);
+        [bb[p], bb[bl]] = [bb[bl], bb[p]];
+      }
+      assert.strictEqual(correctTiles(bb), 8, 'blandningen ska gå att lösa');
+    }
+  }
+  assert(puzzleSolvedRows > 0, 'någon bot skulle ha löst pusslet');
 
   // Kingen: kingen +100 per träff, träffar −100, övriga +100.
   {

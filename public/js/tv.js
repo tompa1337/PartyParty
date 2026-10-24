@@ -131,6 +131,7 @@
     if (s.phase === 'warmup') return buildWarmup(s);
     if (s.phase === 'play' && s.round && s.round.type === 'swipe') return updateSwipe(s);
     if (s.phase === 'play' && s.round && s.round.type === 'king') return buildPlay(s);
+    if (s.phase === 'play' && s.round && s.round.type === 'pussel') return updatePussel(s);
     if (s.phase === 'vote') return buildVote(s);
     if (s.phase === 'reveal') {
       const w = stage.querySelector('.res .wait span');
@@ -225,6 +226,17 @@
         <div class="lr"><div class="side">← ${esc(r.left)}</div><div class="vs">eller</div><div class="side">${esc(r.right)} →</div></div>
         <div class="bars" id="bars"></div>`;
       updateSwipe(s);
+    } else if (r.type === 'pussel') {
+      stage.innerHTML = `
+        <div class="pz-stage">
+          <div class="pz-big sheet"><svg viewBox="0 0 300 300">${r.svg}</svg></div>
+          <div>
+            <p class="prompt" style="font-size:3rem">Lägg pusslet i mobilen</p>
+            <p class="sub">Snabbast löst vinner. Hinner ingen, vinner flest brickor på rätt plats.</p>
+            <div class="bars" id="bars"></div>
+          </div>
+        </div>`;
+      updatePussel(s);
     } else if (r.type === 'king') {
       const done = s.players.filter((p) => p.connected && p.status === 'done').length;
       const n = s.players.filter((p) => p.connected).length;
@@ -263,6 +275,20 @@
     if (!sketch || drawStart == null) return;
     sketch.setProgress((performance.now() - drawStart) / drawMs);
     requestAnimationFrame(drawLoop);
+  }
+
+  function updatePussel(s) {
+    const bars = $('#bars');
+    if (!bars || !s.round) return;
+    const pr = s.round.progress || {};
+    bars.innerHTML = s.players
+      .map((p) => {
+        const x = pr[p.id] || { correct: 0 };
+        const label = x.solved ? `<span class="ok">${(x.ms / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })} s</span>` : `${x.correct}/8`;
+        return `<div class="bar"><span class="em">${esc(p.emoji)}</span><span>${esc(p.name)}</span>
+          <div class="track"><div class="fill ${x.solved ? 'done' : ''}" style="width:${x.solved ? 100 : (x.correct / 8) * 100}%"></div></div><span class="pts">${label}</span></div>`;
+      })
+      .join('');
   }
 
   function updateSwipe(s) {
@@ -306,6 +332,10 @@
         return d.dist === 0 ? `${d.value} <span class="ok">exakt!</span>` : `${d.value} <span class="soft">· ${d.dist} fel</span>`;
       case 'swipe':
         return `${d.correct} rätt, ${d.wrong} fel${d.answered < 20 ? ` <span class="soft">· hann ${d.answered}</span>` : ''}`;
+      case 'pussel':
+        return d.solved
+          ? `Löst på ${(d.ms / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })} s <span class="soft">· ${d.moves} drag</span>`
+          : `${d.correct} av 8 rätt <span class="soft">· ej löst</span>`;
       case 'king': {
         if (d.verdict === 'king') return `<b>${esc(d.text || '–')}</b> <span class="soft">· 👑 kingen, ${d.same} träff${d.same === 1 ? '' : 'ar'}</span>`;
         const vote = d.voted ? ` <span class="soft">· röstat ${d.voted.yes}–${d.voted.no}</span>` : '';
@@ -374,6 +404,9 @@
                 .join(', ')}.</p>`
             : '<p class="fact">Ingen swipade fel!</p>'
         }`;
+    } else if (r.type === 'pussel') {
+      left = `<h2><span class="mark">${esc(r.name)}</span></h2>
+        <div class="pz-big sheet" style="max-width:24rem"><svg viewBox="0 0 300 300">${r.svg}</svg></div>`;
     } else if (r.type === 'king') {
       left = `<p class="sub">${esc(r.prompt)}</p>
         <p class="king-who"><span class="crown">👑</span> ${esc(r.kingEmoji)} ${esc(r.kingName)} skrev</p>

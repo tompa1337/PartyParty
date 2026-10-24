@@ -200,3 +200,10 @@ body.tv.wide #rail { display: none; }
 .king-rules { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; }
 .king-rules .sheet { padding: 1.2rem 1.4rem; font-size: 1.4rem; line-height: 1.45; }
 .king-answer { font-size: 6rem; letter-spacing: -0.03em; }
+
+/* Pusslet */
+.pz-stage { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 2.4rem; align-items: center; flex: 1; min-height: 0; }
+.pz-big { aspect-ratio: 1; padding: .8rem; max-height: 68vh; }
+.pz-big svg { display: block; width: 100%; height: 100%; border-radius: 12px; }
+.pz-stage .bars { margin-top: 1.6rem; }
+.bar .fill.done { background: linear-gradient(90deg, #2fbf8f, var(--good)); }

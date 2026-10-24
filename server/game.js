@@ -9,6 +9,7 @@ const swipePairs = require('../content/swipe');
 const finalQs = require('../content/final');
 const warmups = require('../content/warmup');
 const kingPrompts = require('../content/king');
+const puzzles = require('../content/puzzles');
 
 const SCALE = Number(process.env.TIME_SCALE || 1);
 const T = (ms) => Math.round(ms * SCALE);
@@ -26,6 +27,7 @@ const DUR = {
   swipe: 30000,
   finalQuestion: 12000,
   kingWrite: 45000,
+  pussel: 120000,
   kingVote: 30000,
   warmup: 20000,
   reveal: 30000,
@@ -53,6 +55,14 @@ const SEGMENTS = {
   narmast: {
     title: 'Mellan 0–1000',
     rules: ['Svaret ligger alltid mellan 0 och 1000', 'Dra reglaget och lås ditt svar', 'Närmast vinner, vid lika vinner den som låste först'],
+  },
+  pussel: {
+    title: 'Pusslet',
+    rules: [
+      'Alla får samma bild i nio rutor, en är tom',
+      'Tryck eller dra brickorna till den tomma rutan tills bilden är hel',
+      'Snabbast löst vinner. Hinner ingen, vinner den med flest brickor på rätt plats',
+    ],
   },
   swipe: {
     title: 'Höger eller vänster',
@@ -109,11 +119,44 @@ function pickInventionRounds(rounds, n) {
   return out;
 }
 
+// Pusslet: brädet är en lista med 9 platser. Bricka i hör hemma på plats i, 8 är den tomma rutan.
+const BLANK = 8;
+const neighbours = (pos) => {
+  const r = Math.floor(pos / 3);
+  const c = pos % 3;
+  const out = [];
+  if (r > 0) out.push(pos - 3);
+  if (r < 2) out.push(pos + 3);
+  if (c > 0) out.push(pos - 1);
+  if (c < 2) out.push(pos + 1);
+  return out;
+};
+const correctTiles = (board) => board.filter((t, i) => t !== BLANK && t === i).length;
+
+// Blandar genom slumpade lagliga drag från löst läge, så att pusslet alltid går att lösa.
+function scramble() {
+  for (let attempt = 0; attempt < 50; attempt++) {
+    const board = [0, 1, 2, 3, 4, 5, 6, 7, BLANK];
+    let blank = 8;
+    let prev = -1;
+    for (let i = 0; i < 120; i++) {
+      const options = neighbours(blank).filter((x) => x !== prev);
+      const next = options[Math.floor(Math.random() * options.length)];
+      [board[blank], board[next]] = [board[next], board[blank]];
+      prev = blank;
+      blank = next;
+    }
+    if (correctTiles(board) <= 2) return board;
+  }
+  return [7, 6, 5, 4, 3, 2, 1, 0, BLANK]; // reserv om slumpen aldrig gav en bra blandning
+}
+
 function buildPlan(playerIds = []) {
   const plan = [];
   for (const lm of pick(landmarks, 3)) plan.push({ type: 'skiss', landmark: lm });
   for (const items of pickInventionRounds(3, 5)) plan.push({ type: 'ordning', items });
   for (const q of pick(narmastQs, 3)) plan.push({ type: 'narmast', q });
+  plan.push({ type: 'pussel', puzzle: pick(puzzles, 1)[0], start: scramble() });
   const pair = pick(swipePairs, 1)[0];
   const words = shuffle([
     ...pick(pair.leftWords, SWIPE_WORDS_PER_SIDE).map((w) => ({ w, side: 'L' })),
@@ -356,6 +399,11 @@ class Room {
       case 'king':
         this.setPhase('play', T(DUR.kingWrite), () => this.endPlay());
         break;
+      case 'pussel':
+        r.boards = new Map();
+        for (const p of this.players.values()) r.boards.set(p.id, { board: [...r.spec.start], moves: 0, solvedAt: null });
+        this.setPhase('play', T(DUR.pussel), () => this.endPlay());
+        break;
       default:
         this.endPlay();
     }
@@ -444,6 +492,24 @@ class Room {
     return { i, correct };
   }
 
+  // Pusslet: flytta en bricka till den tomma rutan om den ligger bredvid.
+  puzzleMove(playerId, { tile }) {
+    const r = this.round;
+    if (this.phase !== 'play' || !r || r.type !== 'pussel') return null;
+    const st = r.boards.get(playerId);
+    if (!st) return null;
+    if (st.solvedAt) return { ok: false, board: st.board, solved: true };
+    const pos = st.board.indexOf(Number(tile));
+    const blank = st.board.indexOf(BLANK);
+    if (pos < 0 || Number(tile) === BLANK || !neighbours(blank).includes(pos)) return { ok: false, board: st.board };
+    [st.board[pos], st.board[blank]] = [st.board[blank], st.board[pos]];
+    st.moves++;
+    if (correctTiles(st.board) === 8) st.solvedAt = Date.now();
+    this.changed();
+    if (st.solvedAt) this.checkProgress();
+    return { ok: true, board: st.board, solved: !!st.solvedAt };
+  }
+
   // Kingen: varje spelare skickar listan med svar som hen tycker betyder samma som kingens.
   vote(playerId, data) {
     const r = this.round;
@@ -499,6 +565,10 @@ class Room {
     if (this.phase === 'warmup-reveal' && ps.every((p) => r.next.has(p.id))) return this.nextRound();
     if (this.phase === 'bet' && ps.every((p) => r.bets.has(p.id))) return this.startPlay();
     if (this.phase === 'play') {
+      if (r.type === 'pussel') {
+        if (ps.every((p) => r.boards.get(p.id) && r.boards.get(p.id).solvedAt)) return this.endPlay();
+        return;
+      }
       if (r.type === 'swipe') {
         if (ps.every((p) => r.answers.get(p.id) && r.answers.get(p.id).finishedAt)) return this.endPlay();
       } else if (ps.every((p) => r.answers.get(p.id) && r.answers.get(p.id).locked)) {
@@ -588,6 +658,19 @@ class Room {
               perf: a.correct,
               tiebreak: finished ? a.finishedAt - r.swipeStart : r.swipeMs + 1,
               detail: { correct: a.correct, wrong: a.wrong, answered: a.i, finished },
+            };
+          }
+          case 'pussel': {
+            const st = r.boards.get(p.id);
+            if (!st) return { ...base, perf: -1, tiebreak: 0, detail: null };
+            const correct = correctTiles(st.board);
+            const ms = st.solvedAt ? st.solvedAt - r.playStart : null;
+            // Löst går alltid före olöst. Bland lösta vinner snabbast, bland olösta flest brickor rätt.
+            return {
+              ...base,
+              perf: st.solvedAt ? 100 : correct,
+              tiebreak: st.solvedAt ? ms : 0,
+              detail: { solved: !!st.solvedAt, ms: ms == null ? null : Math.round(ms / SCALE), correct, moves: st.moves },
             };
           }
           default:
@@ -688,6 +771,7 @@ class Room {
         return null;
       case 'play': {
         const a = r.answers.get(p.id);
+        if (r.type === 'pussel') return r.boards && r.boards.get(p.id) && r.boards.get(p.id).solvedAt ? 'done' : 'waiting';
         if (r.type === 'swipe') return a && a.finishedAt ? 'done' : 'waiting';
         return a && a.locked ? 'done' : 'waiting';
       }
@@ -843,6 +927,21 @@ class Room {
         if (reveal) o.words = spec.words.map((x) => ({ w: x.w, side: x.side }));
         return o;
       }
+      case 'pussel': {
+        const o = { type: 'pussel', name: spec.puzzle.name };
+        if (this.phase === 'play' || reveal) o.svg = spec.puzzle.svg;
+        if (this.phase === 'play') {
+          if (p) {
+            const st = r.boards.get(p.id);
+            if (st) o.mine = { board: st.board, moves: st.moves, solved: !!st.solvedAt, ms: st.solvedAt ? Math.round((st.solvedAt - r.playStart) / SCALE) : null };
+          } else {
+            o.progress = Object.fromEntries(
+              [...r.boards].map(([pid, st]) => [pid, { correct: correctTiles(st.board), solved: !!st.solvedAt, ms: st.solvedAt ? Math.round((st.solvedAt - r.playStart) / SCALE) : null }])
+            );
+          }
+        }
+        return o;
+      }
       case 'king': {
         const k = this.players.get(spec.kingId) || { name: '?', emoji: '👑' };
         const o = { type: 'king', kingId: spec.kingId, kingName: k.name, kingEmoji: k.emoji, prompt: spec.prompt };
@@ -901,4 +1000,4 @@ function pickKeys(obj, keys) {
   return Object.fromEntries(keys.map((k) => [k, obj[k]]));
 }
 
-module.exports = { Room, DUR, SEGMENTS, START_POINTS, buildPlan };
+module.exports = { Room, DUR, SEGMENTS, START_POINTS, buildPlan, scramble, correctTiles };
