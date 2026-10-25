@@ -3,7 +3,9 @@ const http = require('http');
 const express = require('express');
 const { Server } = require('socket.io');
 const QRCode = require('qrcode');
-const { Room } = require('./game');
+const crypto = require('crypto');
+const { Room, SEGMENT_ORDER } = require('./game');
+const bots = require('./bots');
 
 const PORT = process.env.PORT || 3000;
 const ROOT = path.join(__dirname, '..');
@@ -23,6 +25,39 @@ app.use('/vendor/fonts/figtree', express.static(path.join(ROOT, 'node_modules/@f
 app.get('/', (_req, res) => res.sendFile(path.join(ROOT, 'public/tv.html')));
 app.get('/spela', (_req, res) => res.sendFile(path.join(ROOT, 'public/play.html')));
 app.get('/health', (_req, res) => res.json({ ok: true, rooms: rooms.size }));
+
+// ---------- testsidan ----------
+// Skyddas av lösenordet i miljövariabeln TEST_PASSWORD (sätts i Railway). Utan den är testsidan avstängd.
+const TEST_PASSWORD = process.env.TEST_PASSWORD || '';
+const testToken = () => crypto.createHmac('sha256', TEST_PASSWORD).update('partyparty-test').digest('hex');
+const safeEqual = (a, b) => {
+  const x = Buffer.from(String(a));
+  const y = Buffer.from(String(b));
+  return x.length === y.length && crypto.timingSafeEqual(x, y);
+};
+function cookieValue(header, name) {
+  const m = String(header || '').match(new RegExp(`(?:^|;\\s*)${name}=([^;]+)`));
+  return m ? decodeURIComponent(m[1]) : null;
+}
+function isTester(cookieHeader) {
+  return !!TEST_PASSWORD && safeEqual(cookieValue(cookieHeader, 'pp_test') || '', testToken());
+}
+app.get('/test', (req, res) => {
+  if (!TEST_PASSWORD) {
+    return res.status(404).type('text/plain; charset=utf-8').send('Testsidan är avstängd. Sätt variabeln TEST_PASSWORD i Railway för att slå på den.');
+  }
+  // Inloggning med webbläsarens vanliga lösenordsruta. Användarnamnet spelar ingen roll.
+  const auth = String(req.headers.authorization || '');
+  const pass = auth.startsWith('Basic ') ? Buffer.from(auth.slice(6), 'base64').toString().split(':').slice(1).join(':') : '';
+  if (!safeEqual(pass, TEST_PASSWORD)) {
+    res.set('WWW-Authenticate', 'Basic realm="PartyParty test", charset="UTF-8"');
+    return res.status(401).type('text/plain; charset=utf-8').send('Fel lösenord.');
+  }
+  const secure = req.secure || req.headers['x-forwarded-proto'] === 'https';
+  res.cookie('pp_test', testToken(), { httpOnly: true, sameSite: 'lax', secure, maxAge: 30 * 24 * 3600 * 1000 });
+  res.set('Cache-Control', 'no-store');
+  res.sendFile(path.join(ROOT, 'private/test.html'));
+});
 
 // ---------- rum ----------
 const rooms = new Map();
@@ -55,7 +90,10 @@ function broadcast(room) {
 }
 
 function createRoom() {
-  const room = new Room(newCode(), scheduleBroadcast);
+  const room = new Room(newCode(), (r) => {
+    scheduleBroadcast(r);
+    if (r.test) bots.tick(r);
+  });
   rooms.set(room.code, room);
   return room;
 }
@@ -64,7 +102,7 @@ function createRoom() {
 setInterval(() => {
   const now = Date.now();
   for (const [code, room] of rooms) {
-    const anyone = room.hostConnected || room.connectedPlayers().length > 0;
+    const anyone = room.hostConnected || room.connectedPlayers().some((p) => !p.bot);
     if (!anyone && now - room.lastActivity > 30 * 60 * 1000) {
       clearTimeout(room.timer);
       rooms.delete(code);
@@ -79,8 +117,18 @@ io.on('connection', (socket) => {
   let playerId = null;
 
   // TV:n skapar eller återansluter till ett rum.
-  socket.on('host:hello', async ({ code, origin } = {}, ack) => {
-    room = (code && rooms.get(String(code).toUpperCase())) || createRoom();
+  socket.on('host:hello', async ({ code, origin, test } = {}, ack) => {
+    const existing = code && rooms.get(String(code).toUpperCase());
+    // Ett testrum skapas bara om webbläsaren har loggat in på /test.
+    const wantTest = test && isTester(socket.handshake.headers.cookie);
+    if (existing && (!wantTest || existing.test)) room = existing;
+    else room = createRoom();
+    if (wantTest && !room.test) {
+      const segments = Array.isArray(test.segments) ? test.segments.filter((x) => x === 'warmup' || SEGMENT_ORDER.includes(x)) : [];
+      room.test = { segments: segments.length ? segments : ['warmup', ...SEGMENT_ORDER] };
+      bots.addBots(room, Number(test.bots) || 0);
+      room.beforeSkip = () => bots.answerNow(room);
+    }
     role = 'tv';
     room.hostConnected = true;
     socket.join(`tv:${room.code}`);

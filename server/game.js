@@ -151,22 +151,33 @@ function scramble() {
   return [7, 6, 5, 4, 3, 2, 1, 0, BLANK]; // reserv om slumpen aldrig gav en bra blandning
 }
 
-function buildPlan(playerIds = []) {
+// Alla delar i programordning. Uppvärmningen ligger utanför planen.
+const SEGMENT_ORDER = ['skiss', 'ordning', 'narmast', 'pussel', 'swipe', 'king', 'final'];
+
+// test = null för ett vanligt parti. I testläget: { segments: [...], humanIds: [...] }, en omgång per del.
+function buildPlan(playerIds = [], test = null) {
   const plan = [];
-  for (const lm of pick(landmarks, 3)) plan.push({ type: 'skiss', landmark: lm });
-  for (const items of pickInventionRounds(3, 5)) plan.push({ type: 'ordning', items });
-  for (const q of pick(narmastQs, 3)) plan.push({ type: 'narmast', q });
-  plan.push({ type: 'pussel', puzzle: pick(puzzles, 1)[0], start: scramble() });
-  const pair = pick(swipePairs, 1)[0];
-  const words = shuffle([
-    ...pick(pair.leftWords, SWIPE_WORDS_PER_SIDE).map((w) => ({ w, side: 'L' })),
-    ...pick(pair.rightWords, SWIPE_WORDS_PER_SIDE).map((w) => ({ w, side: 'R' })),
-  ]);
-  plan.push({ type: 'swipe', pair, words });
-  // Kingen: en omgång per spelare, i slumpad ordning.
-  const prompts = pick(kingPrompts, playerIds.length);
-  shuffle(playerIds).forEach((kingId, i) => plan.push({ type: 'king', kingId, prompt: prompts[i % prompts.length] }));
-  for (const q of pick(finalQs, 5)) plan.push({ type: 'final', q });
+  const want = (type) => !test || test.segments.includes(type);
+  const n = (normal) => (test ? 1 : normal);
+  if (want('skiss')) for (const lm of pick(landmarks, n(3))) plan.push({ type: 'skiss', landmark: lm });
+  if (want('ordning')) for (const items of pickInventionRounds(n(3), 5)) plan.push({ type: 'ordning', items });
+  if (want('narmast')) for (const q of pick(narmastQs, n(3))) plan.push({ type: 'narmast', q });
+  if (want('pussel')) plan.push({ type: 'pussel', puzzle: pick(puzzles, 1)[0], start: scramble() });
+  if (want('swipe')) {
+    const pair = pick(swipePairs, 1)[0];
+    const words = shuffle([
+      ...pick(pair.leftWords, SWIPE_WORDS_PER_SIDE).map((w) => ({ w, side: 'L' })),
+      ...pick(pair.rightWords, SWIPE_WORDS_PER_SIDE).map((w) => ({ w, side: 'R' })),
+    ]);
+    plan.push({ type: 'swipe', pair, words });
+  }
+  if (want('king')) {
+    // Kingen: en omgång per spelare. I testläget en omgång där du själv är kingen.
+    const kings = test ? [(test.humanIds && test.humanIds[0]) || playerIds[0]].filter(Boolean) : shuffle(playerIds);
+    const prompts = pick(kingPrompts, Math.max(1, kings.length));
+    kings.forEach((kingId, i) => plan.push({ type: 'king', kingId, prompt: prompts[i % prompts.length] }));
+  }
+  if (want('final')) for (const q of pick(finalQs, n(5))) plan.push({ type: 'final', q });
   return plan;
 }
 
@@ -175,6 +186,7 @@ class Room {
     this.code = code;
     this.onChange = onChange; // anropas när något ändrats och alla vyer ska skickas om
     this.players = new Map();
+    this.test = null; // testläge: { segments: [...] }
     this.phase = 'lobby';
     this.plan = [];
     this.roundIndex = -1;
@@ -260,7 +272,9 @@ class Room {
 
   maybeStart() {
     const ps = this.connectedPlayers();
-    if (this.phase === 'lobby' && ps.length >= 2 && ps.every((p) => p.ready)) this.startGame();
+    // I testläget räcker det med en spelare.
+    const min = this.test ? 1 : 2;
+    if (this.phase === 'lobby' && ps.length >= min && ps.some((p) => !p.bot) && ps.every((p) => p.ready)) this.startGame();
   }
 
   // ---------- fasstyrning ----------
@@ -285,10 +299,14 @@ class Room {
     }
     // Spelare som inte är anslutna när spelet startar tas bort.
     for (const p of [...this.players.values()]) if (!p.connected) this.players.delete(p.id);
-    this.plan = buildPlan([...this.players.keys()]);
+    const test = this.test
+      ? { segments: this.test.segments, humanIds: [...this.players.values()].filter((p) => !p.bot).map((p) => p.id) }
+      : null;
+    this.plan = buildPlan([...this.players.keys()], test);
     this.roundIndex = -1;
     this.lastResults = null;
-    this.setPhase('countdown', T(DUR.countdown), () => this.startWarmup());
+    const skipWarmup = this.test && !this.test.segments.includes('warmup');
+    this.setPhase('countdown', T(DUR.countdown), () => (skipWarmup ? this.nextRound() : this.startWarmup()));
   }
 
   startWarmup() {
@@ -553,6 +571,17 @@ class Room {
   hostNext() {
     if (this.phase === 'reveal' || this.phase === 'warmup-reveal') return this.nextRound();
     if (this.phase === 'segment-intro' || this.phase === 'round-ready') return this.startRound();
+    // I testläget kan man hoppa förbi en pågående del direkt. Botarna hinner svara först.
+    if (!this.test) return;
+    if (this.beforeSkip) this.beforeSkip();
+    if (this.phase === 'countdown') return this.test.segments.includes('warmup') ? this.startWarmup() : this.nextRound();
+    if (this.phase === 'warmup') return this.revealWarmup();
+    if (this.phase === 'bet') return this.startPlay();
+    if (this.phase === 'play') return this.endPlay();
+    if (this.phase === 'vote') {
+      this.round.voteDone = true;
+      return this.endPlay();
+    }
   }
 
   // Går vidare direkt när alla anslutna är klara.
@@ -743,7 +772,7 @@ class Room {
 
   restart() {
     for (const p of this.players.values()) {
-      p.ready = false;
+      p.ready = !!p.bot;
       p.points = START_POINTS;
     }
     this.plan = [];
@@ -792,6 +821,7 @@ class Room {
       emoji: p.emoji,
       points: p.points,
       connected: p.connected,
+      bot: !!p.bot,
       status: this.playerStatus(p),
     }));
   }
@@ -821,6 +851,7 @@ class Room {
       segment: this.segmentInfo(),
       roundIndex: this.roundIndex,
       roundTotal: this.plan.length,
+      test: !!this.test,
     };
   }
 
@@ -1000,4 +1031,4 @@ function pickKeys(obj, keys) {
   return Object.fromEntries(keys.map((k) => [k, obj[k]]));
 }
 
-module.exports = { Room, DUR, SEGMENTS, START_POINTS, buildPlan, scramble, correctTiles };
+module.exports = { Room, DUR, SEGMENTS, SEGMENT_ORDER, START_POINTS, buildPlan, scramble, correctTiles, neighbours, BLANK };

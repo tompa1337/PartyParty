@@ -32,6 +32,22 @@ På TV:n går man vidare med **Enter**, mellanslag eller knappen Nästa. Annars 
 - Muspekaren göms efter tre sekunder utan rörelse.
 - TV-vyn anpassar sig efter skärmen. Om något inte får plats, till exempel med många spelare eller på en låg skärm, krymps innehållet automatiskt så att all text syns utan att skrolla.
 
+## Testsidan
+
+En egen sida för att snabbt prova spelet. Bara den som har lösenordet kommer åt den.
+
+1. Sätt variabeln `TEST_PASSWORD` i Railway (projektet → **Variables** → *New Variable*). Utan den är testsidan avstängd.
+2. Gå till `https://din-adress/test`. Webbläsaren frågar efter användarnamn och lösenord. Användarnamnet kan vara vad som helst, lösenordet är det du satte.
+3. Välj vilka delar som ska vara med och hur många botar (0–5) som ska spela med dig, och tryck **Starta testrummet**.
+
+I testläget:
+- Varje del har bara **en omgång**, och i Kingen är det du som är kingen.
+- Det räcker med en spelare. Gå med från mobilen eller öppna länken under QR-koden i en ny flik.
+- **Enter** på TV:n hoppar till nästa steg, även mitt i en del. Botar som inte hunnit svara svarar då direkt.
+- TV:n visar *Testläge* i övre kanten.
+
+Lokalt: `TEST_PASSWORD=något npm start` och gå till `http://localhost:3000/test`.
+
 ## Köra lokalt
 
 ```bash
@@ -72,9 +88,12 @@ Allt innehåll ligger i `content/` och är lätt att bygga ut:
 server/index.js    webbserver och Socket.IO
 server/game.js     spelrummet och alla faser
 server/scoring.js  poängräkning
+server/bots.js     botar för testläget
+private/test.html  testsidan (skyddas av TEST_PASSWORD)
 public/            TV-vy (tv.html) och mobilvy (play.html)
 content/           frågor och skisser
 test/simulate.js   helt parti med botar
+test/test-mode.js  testsidan och testläget
 ```
 
 Världskartan ritas från [world-atlas](https://github.com/topojson/world-atlas) (Natural Earth, fri att använda) som följer med appen. Den behöver ingen nyckel och inget konto.

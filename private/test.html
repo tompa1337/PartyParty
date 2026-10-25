@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>PartyParty – test</title>
+  <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/base.css">
+  <style>
+    body { min-height: 100vh; display: grid; place-items: center; padding: 32px 16px; }
+    main { width: min(640px, 100%); display: grid; gap: 24px; }
+    h1 { font-size: 52px; letter-spacing: -0.03em; }
+    .lead { color: var(--soft); font-size: 18px; line-height: 1.5; margin: 8px 0 0; }
+    fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 10px; }
+    legend { font-weight: 700; font-size: 15px; color: var(--soft); margin-bottom: 10px; }
+    .segs { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+    .seg { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 14px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); cursor: pointer; font-weight: 600; user-select: none; }
+    .seg input { width: 20px; height: 20px; accent-color: var(--glow); }
+    .seg:has(input:checked) { box-shadow: inset 0 0 0 2px var(--glow); }
+    .bots { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+    .bots label { text-align: center; padding: 12px 0; border-radius: 12px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); cursor: pointer; font-family: var(--display); font-weight: 800; font-size: 22px; }
+    .bots input { position: absolute; opacity: 0; pointer-events: none; }
+    .bots label:has(input:checked) { color: #22140a; background: var(--glow); box-shadow: none; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; }
+    .row button { flex: 1; font-size: 19px; padding: 16px; }
+    .tips { color: var(--soft); font-size: 15px; line-height: 1.6; margin: 0; padding-left: 18px; }
+    .tips b { color: var(--text); }
+  </style>
+</head>
+<body>
+  <main>
+    <div>
+      <h1><span class="mark">Testläge</span></h1>
+      <p class="lead">En omgång per del, så att du snabbt kan se hur allt fungerar. Bara du kommer åt den här sidan.</p>
+    </div>
+
+    <fieldset>
+      <legend>Vilka delar ska vara med?</legend>
+      <div class="segs" id="segs"></div>
+      <div class="row">
+        <button type="button" class="quiet" id="all">Välj alla</button>
+        <button type="button" class="quiet" id="none">Välj inga</button>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Botar som spelar med dig</legend>
+      <div class="bots" id="bots"></div>
+    </fieldset>
+
+    <button id="start" style="font-size:22px;padding:20px">Starta testrummet</button>
+
+    <ul class="tips">
+      <li>Gå med från mobilen genom att skanna QR-koden, eller öppna länken under koden i en ny flik.</li>
+      <li>I testläget räcker det att <b>en</b> person trycker Redo.</li>
+      <li>Tryck <b>Enter</b> på TV:n för att hoppa till nästa steg, även mitt i en del.</li>
+    </ul>
+  </main>
+  <script>
+    const SEGMENTS = [
+      ['warmup', 'Uppvärmning'],
+      ['skiss', 'Skissen'],
+      ['ordning', 'Ordningen'],
+      ['narmast', 'Mellan 0–1000'],
+      ['pussel', 'Pusslet'],
+      ['swipe', 'Höger eller vänster'],
+      ['king', 'Kingen'],
+      ['final', 'Finalen'],
+    ];
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem('pp-test-setup') || '{}'); } catch {}
+    const chosen = new Set(saved.segments || SEGMENTS.map((s) => s[0]));
+    const botsCount = Number.isInteger(saved.bots) ? saved.bots : 2;
+
+    document.getElementById('segs').innerHTML = SEGMENTS.map(([id, name]) =>
+      `<label class="seg"><input type="checkbox" value="${id}" ${chosen.has(id) ? 'checked' : ''}>${name}</label>`).join('');
+    document.getElementById('bots').innerHTML = [0, 1, 2, 3, 4, 5].map((n) =>
+      `<label><input type="radio" name="bots" value="${n}" ${n === botsCount ? 'checked' : ''}>${n}</label>`).join('');
+
+    const boxes = () => [...document.querySelectorAll('#segs input')];
+    document.getElementById('all').onclick = () => boxes().forEach((b) => (b.checked = true));
+    document.getElementById('none').onclick = () => boxes().forEach((b) => (b.checked = false));
+
+    document.getElementById('start').onclick = () => {
+      const segments = boxes().filter((b) => b.checked).map((b) => b.value);
+      if (!segments.length) { document.getElementById('start').textContent = 'Välj minst en del först'; return; }
+      const bots = Number(document.querySelector('#bots input:checked').value);
+      try { localStorage.setItem('pp-test-setup', JSON.stringify({ segments, bots })); } catch {}
+      sessionStorage.removeItem('pp-tv-test-room');
+      location.href = '/?test=' + encodeURIComponent(JSON.stringify({ segments, bots }));
+    };
+  </script>
+</body>
+</html>

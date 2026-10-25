@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "TIME_SCALE=0.5 node server/index.js",
-    "test": "node test/simulate.js"
+    "test": "node test/simulate.js && node test/test-mode.js"
   },
   "repository": {
     "type": "git",

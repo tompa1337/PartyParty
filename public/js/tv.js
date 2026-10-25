@@ -14,10 +14,20 @@
   let drawMs = null;
   let map = null;
 
+  // Testläge: inställningarna kommer från /test via adressen (?test=...).
+  let testOpts = null;
+  try {
+    const t = new URLSearchParams(location.search).get('test');
+    if (t) testOpts = JSON.parse(t);
+  } catch {
+    testOpts = null;
+  }
+  const roomKey = testOpts ? 'pp-tv-test-room' : 'pp-tv-room';
+
   socket.on('connect', () => {
-    const saved = sessionStorage.getItem('pp-tv-room');
-    socket.emit('host:hello', { code: saved, origin: location.origin }, ({ code }) => {
-      sessionStorage.setItem('pp-tv-room', code);
+    const saved = sessionStorage.getItem(roomKey);
+    socket.emit('host:hello', { code: saved, origin: location.origin, test: testOpts }, ({ code }) => {
+      sessionStorage.setItem(roomKey, code);
     });
   });
   socket.on('state', (s) => {
@@ -62,7 +72,7 @@
   document.addEventListener('keydown', (e) => {
     if (e.key === 'f' || e.key === 'F') return toggleFullscreen();
     if (['Enter', ' ', 'ArrowRight'].includes(e.key)) {
-      if (state && ['reveal', 'warmup-reveal', 'segment-intro'].includes(state.phase)) socket.emit('host:next');
+      if (state && (state.test || ['reveal', 'warmup-reveal', 'segment-intro'].includes(state.phase))) socket.emit('host:next');
     }
   });
 
@@ -133,7 +143,8 @@
     const seg = s.segment && s.phase !== 'lobby' && s.phase !== 'podium' && s.phase !== 'countdown'
       ? `<span class="seg">${esc(s.segment.title)}${s.segment.count > 1 ? ` · ${s.segment.index} av ${s.segment.count}` : ''}</span>`
       : '';
-    top.innerHTML = `<span class="logo">PartyParty</span>${seg}<span class="code">Rumskod <b>${esc(s.code)}</b></span>${fsButton()}`;
+    const test = s.test ? `<span class="test-pill" title="Enter hoppar till nästa steg">Testläge · Enter = nästa</span>` : '';
+    top.innerHTML = `<span class="logo">PartyParty</span>${seg}${test}<span class="code">Rumskod <b>${esc(s.code)}</b></span>${fsButton()}`;
     const fsb = $('#fs');
     if (fsb) fsb.addEventListener('click', toggleFullscreen);
   }
@@ -212,7 +223,9 @@
     const ready = s.players.filter((p) => p.connected && p.status === 'ready').length;
     const host = s.joinUrl ? s.joinUrl.replace(/^https?:\/\//, '').replace(/\?.*$/, '') : '';
     let hint;
-    if (n < 2) hint = 'Minst två spelare behövs. Spelet startar när alla har tryckt Redo.';
+    const humans = s.players.filter((p) => p.connected && !p.bot).length;
+    if (s.test && !humans) hint = 'Testläge: gå med från mobilen eller öppna länken under QR-koden i en ny flik.';
+    else if (!s.test && n < 2) hint = 'Minst två spelare behövs. Spelet startar när alla har tryckt Redo.';
     else if (ready < n) hint = `${ready} av ${n} är redo. Spelet startar när alla har tryckt Redo.`;
     else hint = 'Alla är redo!';
     stage.innerHTML = `
@@ -225,6 +238,7 @@
         <div class="qr sheet">
           ${s.qr ? `<img src="${s.qr}" alt="QR-kod för att gå med i spelet">` : ''}
           <p>Gå med i spelet</p>
+          ${s.test && s.joinUrl ? `<p><a class="test-link" href="${esc(s.joinUrl)}" target="_blank" rel="noopener">Öppna mobilvyn i ny flik</a></p>` : ''}
         </div>
         <p class="hint">${esc(hint)}</p>
       </div>`;
