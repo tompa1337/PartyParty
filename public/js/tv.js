@@ -25,8 +25,42 @@
     render();
   });
 
+  // ---------- helskärm ----------
+  // Webbläsare tillåter bara helskärm efter att någon tryckt, så det finns en knapp, tangenten F och dubbelklick.
+  const fsSupported = !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
+  const isFull = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+  function toggleFullscreen() {
+    const el = document.documentElement;
+    if (isFull()) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    else {
+      const res = (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
+      if (res && res.catch) res.catch(() => {});
+    }
+  }
+  function fsButton() {
+    if (!fsSupported || isFull()) return '';
+    return `<button class="quiet" id="fs" title="Helskärm (F)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>Helskärm</button>`;
+  }
+  document.addEventListener('fullscreenchange', () => state && renderTop(state));
+  document.addEventListener('webkitfullscreenchange', () => state && renderTop(state));
+  document.addEventListener('dblclick', (e) => {
+    if (!e.target.closest('button, .leaflet-container')) toggleFullscreen();
+  });
+  // Installerad som app (utan adressfält) behövs ingen knapp.
+  if (window.matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches) document.body.classList.add('standalone');
+  // Muspekaren göms efter tre sekunder utan rörelse.
+  let idleT = null;
+  const wake = () => {
+    document.body.classList.remove('idle');
+    clearTimeout(idleT);
+    idleT = setTimeout(() => document.body.classList.add('idle'), 3000);
+  };
+  document.addEventListener('mousemove', wake);
+  wake();
+
   // Enter, mellanslag eller pil höger går vidare när det går, praktiskt med fjärrkontroll eller tangentbord.
   document.addEventListener('keydown', (e) => {
+    if (e.key === 'f' || e.key === 'F') return toggleFullscreen();
     if (['Enter', ' ', 'ArrowRight'].includes(e.key)) {
       if (state && ['reveal', 'warmup-reveal', 'segment-intro'].includes(state.phase)) socket.emit('host:next');
     }
@@ -52,7 +86,39 @@
     } else {
       update(s);
     }
+    fitAll();
   }
+
+  // ---------- allt ska få plats ----------
+  // Om innehållet är större än sin ram krymps det i små steg tills allt syns.
+  function fit(el) {
+    const box = el.parentElement;
+    if (!box || box.offsetParent === null) return;
+    const W = box.clientWidth;
+    const H = box.clientHeight;
+    let scale = 1;
+    for (let i = 0; i < 14; i++) {
+      el.style.width = `${W / scale}px`;
+      el.style.height = `${H / scale}px`;
+      el.style.transform = scale === 1 ? '' : `scale(${scale})`;
+      if (el.scrollHeight <= el.clientHeight + 1 && el.scrollWidth <= el.clientWidth + 1) break;
+      scale = Math.max(0.55, scale - 0.05);
+    }
+    if (map) map.invalidateSize();
+  }
+  let fitQueued = false;
+  function fitAll() {
+    if (fitQueued) return;
+    fitQueued = true;
+    requestAnimationFrame(() => {
+      fitQueued = false;
+      fit(stage);
+      fit(rail);
+    });
+  }
+  window.addEventListener('resize', fitAll);
+  if (document.fonts) document.fonts.ready.then(fitAll);
+  document.addEventListener('load', fitAll, true); // t.ex. när QR-koden laddats
 
   function cleanup() {
     sketch = null;
@@ -67,7 +133,9 @@
     const seg = s.segment && s.phase !== 'lobby' && s.phase !== 'podium' && s.phase !== 'countdown'
       ? `<span class="seg">${esc(s.segment.title)}${s.segment.count > 1 ? ` · ${s.segment.index} av ${s.segment.count}` : ''}</span>`
       : '';
-    top.innerHTML = `<span class="logo">PartyParty</span>${seg}<span class="code">Rumskod <b>${esc(s.code)}</b></span>`;
+    top.innerHTML = `<span class="logo">PartyParty</span>${seg}<span class="code">Rumskod <b>${esc(s.code)}</b></span>${fsButton()}`;
+    const fsb = $('#fs');
+    if (fsb) fsb.addEventListener('click', toggleFullscreen);
   }
 
   function statusMark(p, s) {
@@ -452,7 +520,8 @@
         icon: L.divIcon({ className: '', html: `<div style="font-size:28px;line-height:1">${esc(row.emoji)}</div>`, iconSize: [30, 30], iconAnchor: [15, 15] }),
       })
         .addTo(map)
-        .bindTooltip(`${esc(row.name)}: ${fmt(row.detail.km)} km`, { permanent: true, direction: 'right', className: 'pin-label', offset: [14, 0] });
+        // Med många spelare krockar lapparna; då står avståndet bara i topplistan.
+        .bindTooltip(`${esc(row.name)}: ${fmt(row.detail.km)} km`, { permanent: s.results.rows.length <= 4, direction: 'right', className: 'pin-label', offset: [14, 0] });
     }
     setTimeout(() => {
       map.invalidateSize();

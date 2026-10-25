@@ -142,3 +142,40 @@ input[type='range'] { width: 100%; accent-color: var(--glow); height: 40px; }
 .pz-tile svg { display: block; width: 100%; height: 100%; border-radius: 10px; }
 .pz-tile.home svg { box-shadow: 0 0 0 2px rgba(79, 227, 176, 0.55); }
 .pz-full { width: 70%; margin: 18px auto; aspect-ratio: 1; border-radius: 18px; overflow: hidden; box-shadow: 0 0 40px rgba(255, 181, 71, 0.35); }
+
+/* Små skärmar (till exempel iPhone SE): tätare så att allt får plats utan att skrolla. */
+@media (max-height: 700px) {
+  body.phone { font-size: 16px; }
+  #me { padding: 10px 14px 6px; min-height: 46px; }
+  #me .em { width: 34px; height: 34px; font-size: 22px; }
+  #me .pts { font-size: 24px; }
+  #timer { margin: 0 14px; }
+  #app { gap: 10px; padding: 12px 14px; }
+  .title { font-size: 38px; }
+  .title-sm { font-size: 28px; }
+  .lead { font-size: 17px; line-height: 1.35; }
+  .full { font-size: 18px; padding: 14px; }
+  .opts-phone { gap: 8px; }
+  .opts-phone button { font-size: 17px; padding: 12px 14px; }
+  .ready-btn { font-size: 26px; padding: 20px; }
+  .bet-amount { font-size: 64px; }
+  .value { font-size: 72px; }
+  .result-big { font-size: 68px; }
+  .fact-box { padding: 10px; }
+  .fact-box b { font-size: 28px; }
+  .sortlist { gap: 8px; }
+  .sortlist li { padding: 11px 14px; font-size: 17px; }
+  .word-card { min-height: 150px; font-size: 30px; }
+  .swipe-area { min-height: 200px; }
+  .sides button { padding: 14px 8px; font-size: 17px; }
+  .king-prompt { font-size: 26px; }
+  .vote { padding: 12px 14px; font-size: 17px; }
+  .votes { gap: 8px; }
+  .mapwrap { min-height: 260px; }
+  .pz-thumb { width: 60px; height: 60px; }
+  .pz { width: min(100%, 52vh); margin: 0 auto; }
+  .emojis button { font-size: 22px; padding: 4px 0; }
+  input[type='text'] { font-size: 19px; padding: 11px 14px; }
+  input.code { font-size: 28px; }
+  .pz-full { width: 55%; margin: 10px auto; }
+}

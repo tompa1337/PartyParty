@@ -1,5 +1,9 @@
 /* TV-vyn skalas efter skärmens bredd så att den ser likadan ut på 720p och 4K. */
-html { font-size: clamp(12px, 1.25vw, 40px); }
+/* Allt mäts i rem, och rem följer både bredd och höjd. Då får hela vyn alltid plats på skärmen,
+   oavsett om den är 16:9, 16:10 eller en laptop med webbläsarens verktygsfält kvar. */
+html { font-size: min(1.25vw, 2.22vh); overflow: hidden; }
+body.tv { cursor: default; }
+body.tv.idle, body.tv.idle * { cursor: none !important; }
 body.tv {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 21rem;
@@ -24,23 +28,13 @@ body.tv {
 #timer { grid-area: timer; margin: 0 2.4rem; visibility: hidden; }
 #timer.on { visibility: visible; }
 
-#stage {
-  grid-area: stage;
-  padding: 1.8rem 2rem 2rem 2.4rem;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1.4rem;
-}
-
-#rail {
-  grid-area: rail;
-  padding: 1.8rem 2.4rem 2rem 0;
-  display: flex;
-  flex-direction: column;
-  gap: .55rem;
-  overflow: hidden;
-}
+/* Scenen och ställningen ligger i var sin ram. Innehållet krymps automatiskt (se fit i tv.js)
+   om det inte får plats, så att ingenting hamnar utanför skärmen. */
+#stage-wrap { grid-area: stage; position: relative; min-height: 0; min-width: 0; overflow: hidden; margin: 1.8rem 2rem 1.6rem 2.4rem; }
+#rail-wrap { grid-area: rail; position: relative; min-height: 0; overflow: hidden; margin: 1.8rem 2.4rem 1.6rem 0; }
+#stage, #rail { position: absolute; left: 0; top: 0; width: 100%; height: 100%; transform-origin: 0 0; display: flex; flex-direction: column; }
+#stage { gap: 1.4rem; }
+#rail { gap: .55rem; }
 #rail h3 { font-size: 1.3rem; font-weight: 700; color: var(--soft); margin-bottom: .4rem; font-family: var(--body); letter-spacing: 0; }
 .pl {
   display: grid;
@@ -185,7 +179,7 @@ svg.sketch path.ghost { stroke: var(--glow); stroke-width: 6; opacity: .14; }
 
 /* Under resultatet tar topplistan hela bredden och ställningen syns i tabellen. */
 body.tv.wide { grid-template-areas: 'top top' 'timer timer' 'stage stage'; }
-body.tv.wide #rail { display: none; }
+body.tv.wide #rail-wrap { display: none; }
 
 /* Leaflet i mörkt */
 .leaflet-container { font-family: var(--body); }
@@ -207,3 +201,8 @@ body.tv.wide #rail { display: none; }
 .pz-big svg { display: block; width: 100%; height: 100%; border-radius: 12px; }
 .pz-stage .bars { margin-top: 1.6rem; }
 .bar .fill.done { background: linear-gradient(90deg, #2fbf8f, var(--good)); }
+
+/* Helskärm */
+#fs { font-size: .95rem; padding: .45rem .9rem; display: inline-flex; align-items: center; gap: .5rem; }
+#fs svg { width: 1rem; height: 1rem; }
+:fullscreen #fs, body.standalone #fs { display: none; }

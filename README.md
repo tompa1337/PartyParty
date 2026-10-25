@@ -25,6 +25,13 @@ I **finalen** satsar man före varje fråga, från 0 till allt man har. Alla ran
 
 På TV:n går man vidare med **Enter**, mellanslag eller knappen Nästa. Annars går spelet vidare när alla tryckt Nästa i mobilen.
 
+### Helskärm
+
+- Tryck på **Helskärm** uppe till höger, tryck **F** eller dubbelklicka var som helst på TV-sidan. **Esc** går ur helskärm.
+- Vill du slippa webbläsaren helt kan sidan installeras som en app: i Chrome eller Edge, klicka på installera-ikonen i adressfältet (eller menyn → *Installera PartyParty*). Appen startar sedan direkt i helskärm, utan flikar och adressfält.
+- Muspekaren göms efter tre sekunder utan rörelse.
+- TV-vyn anpassar sig efter skärmen. Om något inte får plats, till exempel med många spelare eller på en låg skärm, krymps innehållet automatiskt så att all text syns utan att skrolla.
+
 ## Köra lokalt
 
 ```bash
