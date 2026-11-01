@@ -72,40 +72,39 @@ const windows = (x0, x1, y0, y1, n) => {
   return out.join(' ');
 };
 
-// Turning Torso: nio kuber som var och en är vriden lite mer än den under.
-// Varje kub ritas som sidor plus ett snett "golv" ovanpå, så att vridningen syns.
-const torso = () => {
-  const n = 9;
-  const R = 44;
-  const blocks = [];
-  const plates = [];
-  const edges = [];
-  const sp = [];
-  for (let i = 0; i < n; i++) {
-    const y0 = 272 - i * 26;
-    const y1 = y0 - 24;
-    const a = (i * 11 * Math.PI) / 180;
-    const corners = [0, 1, 2, 3].map((k) => {
-      const t = a + Math.PI / 4 + (k * Math.PI) / 2;
-      return { x: 200 + R * Math.cos(t), z: Math.sin(t) };
-    });
-    const xs = corners.map((c) => c.x);
-    const lo = Math.min(...xs).toFixed(1);
-    const hi = Math.max(...xs).toFixed(1);
-    blocks.push(`M${lo} ${y0} L${lo} ${y1} M${hi} ${y0} L${hi} ${y1}`);
-    plates.push(corners.map((c, k) => `${k ? 'L' : 'M'}${c.x.toFixed(1)} ${(y1 + 7 * c.z).toFixed(1)}`).join(' ') + ' Z');
-    const front = corners.reduce((m, c) => (c.z > m.z ? c : m));
-    edges.push(`M${front.x.toFixed(1)} ${(y0 + 7 * front.z).toFixed(1)} L${front.x.toFixed(1)} ${(y1 + 7 * front.z).toFixed(1)}`);
-    sp.push([Number(hi) + 12, y1]);
-  }
+
+// Ett ansikte i berget (Mount Rushmore). x, y = mitten av ansiktet.
+const face = (x, y, s = 1, beard = false) => {
+  const w = 24 * s;
+  const h = 40 * s;
   return {
-    blocks: blocks.join(' '),
-    plates: plates.join(' '),
-    edges: edges.join(' '),
-    spine: `M${sp[0][0].toFixed(1)} 272 ` + sp.map(([x, y]) => `L${x.toFixed(1)} ${y}`).join(' '),
+    head: `M${x - w} ${y - h * 0.2} Q${x - w} ${y - h} ${x} ${y - h} Q${x + w} ${y - h} ${x + w} ${y - h * 0.2} Q${x + w * 0.9} ${y + h * 0.75} ${x} ${y + h * 0.85} Q${x - w * 0.9} ${y + h * 0.75} ${x - w} ${y - h * 0.2}`,
+    features: `M${x - w * 0.6} ${y - h * 0.3} L${x - w * 0.15} ${y - h * 0.28} M${x + w * 0.15} ${y - h * 0.28} L${x + w * 0.6} ${y - h * 0.3} M${x - w * 0.5} ${y - h * 0.15} q${w * 0.15} ${-h * 0.06} ${w * 0.3} 0 M${x + w * 0.2} ${y - h * 0.15} q${w * 0.15} ${-h * 0.06} ${w * 0.3} 0 M${x} ${y - h * 0.25} L${x - w * 0.12} ${y + h * 0.15} L${x + w * 0.1} ${y + h * 0.18} M${x - w * 0.35} ${y + h * 0.38} Q${x} ${y + h * 0.46} ${x + w * 0.35} ${y + h * 0.38}`,
+    beard: beard ? `M${x - w * 0.85} ${y + h * 0.1} Q${x - w * 0.5} ${y + h * 0.9} ${x} ${y + h * 0.95} Q${x + w * 0.5} ${y + h * 0.9} ${x + w * 0.85} ${y + h * 0.1}` : '',
   };
 };
-const TT = torso();
+
+// Enkla bokstäver av streck, w × h, nedre vänstra hörnet på (x, y).
+const LETTERS = {
+  H: (w, h) => `M0 0 L0 ${-h} M${w} 0 L${w} ${-h} M0 ${-h / 2} L${w} ${-h / 2}`,
+  O: (w, h) => `M${w / 2} 0 Q0 0 0 ${-h / 2} Q0 ${-h} ${w / 2} ${-h} Q${w} ${-h} ${w} ${-h / 2} Q${w} 0 ${w / 2} 0`,
+  L: (w, h) => `M0 ${-h} L0 0 L${w * 0.85} 0`,
+  Y: (w, h) => `M0 ${-h} L${w / 2} ${-h * 0.45} L${w} ${-h} M${w / 2} ${-h * 0.45} L${w / 2} 0`,
+  W: (w, h) => `M0 ${-h} L${w * 0.22} 0 L${w / 2} ${-h * 0.65} L${w * 0.78} 0 L${w} ${-h}`,
+  D: (w, h) => `M0 0 L0 ${-h} Q${w} ${-h} ${w} ${-h / 2} Q${w} 0 0 0`,
+};
+const word = (text, x0, y0, x1, y1, w, h) =>
+  [...text].map((ch, i) => {
+    const t = i / (text.length - 1);
+    const x = x0 + (x1 - x0) * t;
+    const y = y0 + (y1 - y0) * t;
+    return LETTERS[ch](w, h).replace(/([ML]|Q)([-\d. ]+)/g, (m, cmd, nums) => {
+      const n = nums.trim().split(/\s+/).map(Number);
+      const out = [];
+      for (let k = 0; k < n.length; k += 2) out.push(`${(n[k] + x).toFixed(1)} ${(n[k + 1] + y).toFixed(1)}`);
+      return `${cmd}${out.join(' ')} `;
+    }).trim();
+  });
 
 module.exports = [
   {
@@ -164,46 +163,6 @@ module.exports = [
       circle(200, 148, 17),
       'M119 124 L119 172 M281 124 L281 172 M134 118 L186 140 M266 118 L214 140 M134 178 L186 156 M266 178 L214 156',
       'M193 252 L207 252 M193 260 L207 260',
-    ],
-  },
-  {
-    id: 'turningtorso',
-    name: 'Turning Torso',
-    place: 'Malmö, Sverige',
-    lat: 55.6133,
-    lon: 12.9757,
-    fact: 'Skyskrapan är 190 meter hög och vrider sig ett kvarts varv från botten till toppen.',
-    paths: [
-      'M20 272 L380 272',
-      TT.blocks,
-      TT.plates,
-      TT.spine,
-      TT.edges,
-      'M40 272 L40 240 L90 240 L90 272 M310 272 L310 250 L360 250 L360 272',
-      waves(288, 20, 380, 46),
-    ],
-  },
-  {
-    id: 'stadshuset',
-    name: 'Stockholms stadshus',
-    place: 'Stockholm, Sverige',
-    lat: 59.3275,
-    lon: 18.0543,
-    fact: 'Här hålls Nobelfesten varje år. Tornet har Tre kronor i toppen.',
-    paths: [
-      'M10 252 L390 252',
-      'M30 252 L30 160 L262 160 L262 252',
-      'M26 160 L266 160 L246 140 L46 140 Z',
-      'M262 252 L262 74 L310 74 L310 252',
-      'M258 74 L314 74 L314 64 L258 64 Z',
-      'M270 64 L270 46 L302 46 L302 64 M270 46 Q286 30 302 46',
-      'M286 36 L286 14',
-      'M278 16 L280 8 L283 13 L286 6 L289 13 L292 8 L294 16 Z M279 26 L281 18 L284 23 M288 23 L291 18 L293 26',
-      'M58 252 L58 216 Q70 200 82 216 L82 252 M98 252 L98 216 Q110 200 122 216 L122 252 M138 252 L138 216 Q150 200 162 216 L162 252 M178 252 L178 216 Q190 200 202 216 L202 252',
-      windows(40, 250, 172, 196, 14),
-      'M276 100 L276 130 M296 100 L296 130 M276 160 L276 190 M296 160 L296 190',
-      waves(270, 10, 390, 40),
-      waves(288, 30, 370, 52),
     ],
   },
   {
@@ -369,26 +328,6 @@ module.exports = [
     ],
   },
   {
-    id: 'neuschwanstein',
-    name: 'Neuschwanstein',
-    place: 'Bayern, Tyskland',
-    lat: 47.5576,
-    lon: 10.7498,
-    fact: 'Sagoslottet byggdes av kung Ludvig II av Bayern och inspirerade Disneys Törnrosaslott.',
-    paths: [
-      'M0 120 L60 60 L120 110 L190 40 L260 100 L320 50 L400 110',
-      'M0 290 Q60 250 110 236 L300 236 Q350 250 400 290',
-      'M120 236 L120 150 L250 150 L250 236',
-      tower(270, 34, 236, 110, 60),
-      tower(110, 22, 236, 130, 96) + ' ' + tower(200, 18, 150, 96, 62),
-      tower(160, 14, 150, 112, 88) + ' ' + tower(236, 12, 150, 120, 98),
-      'M120 150 L140 128 L230 128 L250 150',
-      windows(128, 244, 170, 190, 9) + ' ' + windows(128, 244, 204, 222, 9),
-      'M262 130 L262 146 M278 130 L278 146 M262 170 L262 186 M278 170 L278 186',
-      'M270 60 L270 50 M110 96 L110 88 M200 62 L200 54',
-    ],
-  },
-  {
     id: 'empirestate',
     name: 'Empire State Building',
     place: 'New York, USA',
@@ -407,39 +346,136 @@ module.exports = [
     ],
   },
   {
-    id: 'globen',
-    name: 'Globen',
-    place: 'Stockholm, Sverige',
-    lat: 59.2936,
-    lon: 18.0831,
-    fact: 'Globen, som i dag heter Avicii Arena, är världens största klotformade byggnad.',
+    id: 'rushmore',
+    name: 'Mount Rushmore',
+    place: 'South Dakota, USA',
+    lat: 43.8791,
+    lon: -103.4591,
+    fact: 'Fyra presidenter är huggna i berget: Washington, Jefferson, Roosevelt och Lincoln. Varje ansikte är runt 18 meter högt.',
     paths: [
-      'M10 262 L390 262',
-      'M175 262 A105 105 0 1 1 225 262',
-      'M108 110 Q200 124 292 110 M95 160 Q200 178 305 160 M108 210 Q200 226 292 210',
-      'M200 55 Q140 160 182 262 M200 55 Q260 160 218 262 M200 55 Q90 150 140 240 M200 55 Q310 150 260 240',
-      'M200 55 Q232 46 262 70',
-      circle(232, 50, 7),
-      'M30 262 L30 228 L74 228 L74 262 M330 262 L330 218 L372 218 L372 262',
-      'M38 238 L66 238 M38 250 L66 250 M338 230 L364 230 M338 244 L364 244',
+      'M0 200 Q40 120 70 90 Q120 50 200 56 Q280 50 330 80 Q370 110 400 170',
+      'M0 280 Q60 250 120 262 T260 254 T400 270',
+      face(92, 140, 1.05).head + ' ' + face(162, 130, 1.05).head,
+      face(232, 150, 0.95).head + ' ' + face(306, 140, 1.1).head,
+      face(92, 140, 1.05).features + ' ' + face(162, 130, 1.05).features,
+      face(232, 150, 0.95).features + ' ' + face(306, 140, 1.1).features + ' ' + face(306, 140, 1.1, true).beard,
+      'M216 142 L248 142 M220 137 Q226 131 232 137 Q238 131 244 137',
+      'M30 260 L40 230 L50 260 M60 266 L72 232 L84 266 M330 262 L342 228 L354 262 M360 266 L370 238 L380 266',
     ],
   },
   {
-    id: 'oresundsbron',
-    name: 'Öresundsbron',
-    place: 'Mellan Malmö och Köpenhamn',
-    lat: 55.5754,
-    lon: 12.8264,
-    fact: 'Bron öppnade år 2000 och har bilväg ovanpå och järnväg under.',
+    id: 'louvren',
+    name: 'Louvren',
+    place: 'Paris, Frankrike',
+    lat: 48.8606,
+    lon: 2.3376,
+    fact: 'Glaspyramiden byggdes 1989 som ny entré till världens mest besökta konstmuseum, där Mona Lisa hänger.',
     paths: [
-      'M0 196 L400 196 M0 206 L400 206',
-      'M128 262 L128 56 M144 262 L144 56 M256 262 L256 56 M272 262 L272 56',
-      'M136 70 L30 196 M136 90 L60 196 M136 110 L90 196 M136 70 L242 196 M136 90 L212 196 M136 110 L182 196',
-      'M264 70 L370 196 M264 90 L340 196 M264 110 L310 196 M264 70 L158 196 M264 90 L188 196 M264 110 L218 196',
-      'M128 150 L144 150 M256 150 L272 150',
-      'M20 206 L20 262 M70 206 L70 262 M330 206 L330 262 M380 206 L380 262',
-      'M20 186 L60 186 L60 196 M96 186 L136 186',
-      waves(276, 10, 390, 44),
+      'M0 262 L400 262',
+      'M0 196 L0 120 L400 120 L400 196',
+      'M0 120 L20 100 L380 100 L400 120 M170 100 L180 74 L220 74 L230 100',
+      'M110 262 L200 140 L290 262 Z',
+      'M200 140 L200 262 M155 201 L245 201 M132 232 L268 232',
+      'M178 170 L222 170 M200 140 L155 262 M200 140 L245 262 M200 140 L132 262 M200 140 L268 262',
+      'M40 262 L60 236 L80 262 M320 262 L340 236 L360 262',
+      windows(10, 390, 136, 160, 22) + ' ' + windows(10, 390, 172, 192, 22),
+    ],
+  },
+  {
+    id: 'hollywood',
+    name: 'Hollywoodskylten',
+    place: 'Los Angeles, USA',
+    lat: 34.1341,
+    lon: -118.3215,
+    fact: 'Skylten sattes upp 1923 som reklam för ett bostadsområde och stod först på HOLLYWOODLAND.',
+    paths: [
+      'M0 250 Q20 214 40 200 L340 150 Q372 150 400 196',
+      'M0 290 Q120 260 200 278 T400 268',
+      ...(() => {
+        // Bokstäverna står på stolpar längs sluttningen. Sista bokstäverna gör det solklart.
+        const ls = word('HOLLYWOOD', 40, 186, 312, 141, 26, 42);
+        const legs = Array.from({ length: 9 }, (_, i) => {
+          const x = 40 + (272 * i) / 8;
+          const y = 186 - (45 * i) / 8;
+          return `M${(x + 6).toFixed(1)} ${y.toFixed(1)} L${(x + 6).toFixed(1)} ${(y + 12).toFixed(1)} M${(x + 20).toFixed(1)} ${y.toFixed(1)} L${(x + 20).toFixed(1)} ${(y + 12).toFixed(1)}`;
+        }).join(' ');
+        return [legs, ls.slice(0, 2).join(' '), ls.slice(2, 4).join(' '), ls.slice(4, 6).join(' '), ls.slice(6, 9).join(' ')];
+      })(),
+    ],
+  },
+  {
+    id: 'chichenitza',
+    name: 'Chichén Itzá',
+    place: 'Yucatán, Mexiko',
+    lat: 20.6843,
+    lon: -88.5678,
+    fact: 'Vid vår- och höstdagjämning ser skuggorna ut som en orm som kryper nerför trappan.',
+    paths: [
+      'M0 270 L400 270',
+      'M50 270 L66 252 L82 252 L96 234 L110 234 L124 216 L138 216 L150 198 L160 198 L170 180 L174 162 M350 270 L334 252 L318 252 L304 234 L290 234 L276 216 L262 216 L250 198 L240 198 L230 180 L226 162',
+      'M174 162 L226 162',
+      'M66 252 L334 252 M96 234 L304 234 M124 216 L276 216 M150 198 L250 198 M170 180 L230 180',
+      'M180 162 L180 122 L220 122 L220 162 M176 122 L224 122 L224 114 L176 114 Z',
+      'M182 270 L188 162 M218 270 L212 162',
+      'M184 256 L216 256 M185 240 L215 240 M186 224 L214 224 M187 208 L213 208 M188 192 L212 192 M188 176 L212 176',
+      'M192 162 L192 140 L208 140 L208 162',
+      'M10 270 Q20 240 34 262 Q40 236 50 266 M360 266 Q370 236 380 262 Q388 240 396 270',
+    ],
+  },
+  {
+    id: 'parthenon',
+    name: 'Parthenon',
+    place: 'Aten, Grekland',
+    lat: 37.9715,
+    lon: 23.7267,
+    fact: 'Templet byggdes åt gudinnan Athena på Akropolis för nästan 2 500 år sedan.',
+    paths: [
+      'M0 290 Q50 250 90 236 L310 236 Q352 250 400 290',
+      'M70 236 L330 236 M76 226 L324 226 M82 216 L318 216',
+      'M88 216 L88 132 M100 216 L100 132 M118 216 L118 132 M130 216 L130 132 M148 216 L148 132 M160 216 L160 132 M178 216 L178 132 M190 216 L190 132',
+      'M210 216 L210 132 M222 216 L222 132 M240 216 L240 132 M252 216 L252 132 M270 216 L270 132 M282 216 L282 132 M300 216 L300 132 M312 216 L312 132',
+      'M80 132 L320 132 L320 112 L80 112 Z',
+      'M80 112 L200 76 L250 91 M290 103 L320 112',
+      'M80 124 L320 124',
+      'M250 91 L262 100 L274 96 L290 103',
+    ],
+  },
+  {
+    id: 'marinabay',
+    name: 'Marina Bay Sands',
+    place: 'Singapore',
+    lat: 1.2834,
+    lon: 103.8607,
+    fact: 'Tre hotelltorn bär upp ett "skepp" 200 meter upp med en pool som ser ut att sluta i tomma luften.',
+    paths: [
+      'M0 250 L400 250',
+      'M90 250 L96 82 M126 250 L116 82 M180 250 L186 82 M216 250 L206 82 M270 250 L276 82 M306 250 L296 82',
+      'M96 82 L116 82 M186 82 L206 82 M276 82 L296 82',
+      'M60 68 L360 68 Q378 64 392 56 L392 70 Q378 76 360 78 L60 78 Z',
+      'M80 68 L80 60 L84 56 L88 60 L88 68 M120 68 L120 60 L124 56 L128 60 L128 68 M160 68 L160 60 L164 56 L168 60 L168 68 M240 68 L240 60 L244 56 L248 60 L248 68 M330 68 L330 60 L334 56 L338 60 L338 68',
+      windows(96, 116, 100, 240, 3) + ' ' + windows(186, 206, 100, 240, 3) + ' ' + windows(276, 296, 100, 240, 3),
+      waves(268, 10, 390, 44) + ' ' + waves(286, 30, 370, 52),
+      'M20 250 Q30 228 44 236 Q52 220 66 234 Q74 226 80 250',
+    ],
+  },
+  {
+    id: 'burjalarab',
+    name: 'Burj Al Arab',
+    place: 'Dubai, Förenade Arabemiraten',
+    lat: 25.1412,
+    lon: 55.1853,
+    fact: 'Hotellet står på en egen konstgjord ö och är byggt för att se ut som ett segel.',
+    paths: [
+      'M90 266 Q200 252 310 266',
+      'M150 258 L176 26 M160 258 L184 34',
+      'M176 26 Q300 110 248 258',
+      'M150 258 L248 258',
+      'M184 60 Q226 70 252 92 M182 90 Q232 100 262 124 M178 130 Q236 136 266 162 M174 170 Q234 176 264 200 M168 210 Q230 214 258 236',
+      'M188 64 L188 250 M200 66 L200 250',
+      'M176 26 L178 6',
+      'M166 76 L140 76 M118 76 a14 5 0 1 0 28 0 a14 5 0 1 0 -28 0',
+      'M90 262 L0 248 M90 270 L0 256 M30 252 L30 238 M60 257 L60 243',
+      waves(284, 10, 390, 44),
     ],
   },
 ];
