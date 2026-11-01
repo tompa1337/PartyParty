@@ -79,7 +79,8 @@ function bot(name, code, behaviour, emoji) {
         if (t === 'ordning') s.emit('player:answer', { order: st.round.items.map((i) => i.id).reverse(), lock: true });
         if (t === 'narmast') s.emit('player:answer', { value: Math.floor(Math.random() * 1001), lock: true });
         if (t === 'final') s.emit('player:answer', { choice: Math.floor(Math.random() * 4) });
-        if (t === 'zoom' || t === 'emoji') s.emit('player:answer', { choice: Math.floor(Math.random() * 4) });
+        if (t === 'emoji') s.emit('player:answer', { choice: Math.floor(Math.random() * 4) });
+        if (t === 'zoom') s.emit('player:guess', { text: ['Hund', 'Katt', 'Giraff'][Math.floor(Math.random() * 3)] });
         if (t === 'pussel') {
           const board = st.round.mine.board;
           const path = behaviour === 'sleepy' ? randomMoves(board, 6) : solvePuzzle(board);

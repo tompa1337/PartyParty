@@ -194,7 +194,15 @@ function play(room, p, key, r) {
       const text = pickOne(KING_WORDS);
       return later(room, p, key, rand(3000, 9000), () => room.answer(p.id, { text }));
     }
-    case 'zoom':
+    case 'zoom': {
+      // Botar gissar en eller två gånger, oftast rätt till slut.
+      const wrong = ['Hund', 'Häst', 'Fisk', 'Fågel', 'Björn'];
+      const ms = () => rand(4000, 14000) * Number(process.env.TIME_SCALE || 1);
+      return later(room, p, key, ms(), () => {
+        const res = room.zoomGuess(p.id, { text: chance(0.55) ? spec.animal.name : pickOne(wrong) });
+        if (res && !res.right && res.left > 0) setTimeout(() => room.zoomGuess(p.id, { text: chance(0.6) ? spec.animal.name : pickOne(wrong) }), ms() / 2);
+      });
+    }
     case 'emoji': {
       const choice = chance(0.7) ? spec.correct : Math.floor(Math.random() * spec.options.length);
       return later(room, p, key, rand(4000, 16000) * Number(process.env.TIME_SCALE || 1), () => room.answer(p.id, { choice }));

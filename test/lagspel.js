@@ -135,25 +135,43 @@ function teamRoom(type) {
   for (const g of riddles) for (const e of g.emojis) assert(TW.exists(e), `bild saknas i ${g.answer}: ${e}`);
   assert.strictEqual(new Set(zoom.map((a) => a.name)).size, zoom.length, 'djurnamn ska vara unika');
   for (let i = 0; i < 200; i++) {
-    for (const r of buildPlan(ids(3)).filter((x) => x.type === 'zoom' || x.type === 'emoji')) {
+    for (const r of buildPlan(ids(3)).filter((x) => x.type === 'emoji')) {
       assert.strictEqual(r.options.length, 4);
       assert.strictEqual(new Set(r.options).size, 4, 'alternativen ska vara olika');
-      const facit = r.type === 'zoom' ? r.animal.name : r.riddle.answer;
-      assert.strictEqual(r.options[r.correct], facit);
+      assert.strictEqual(r.options[r.correct], r.riddle.answer);
     }
   }
-  // Rätt svar slår fel, och tidigt rätt slår sent rätt.
+  // Skrivna svar: ändelser, stora bokstäver, små stavfel och andra namn godkänns.
+  const S = require('../server/scoring');
+  for (const [g, n, ok] of [
+    ['giraffen', ['Giraff'], true],
+    ['En GIRAFF', ['Giraff'], true],
+    ['elfant', ['Elefant'], true],
+    ['noshorning', ['Noshörning'], true],
+    ['kossa', ['Ko', 'kossa', 'tjur'], true],
+    ['ko', ['Ko'], true],
+    ['by', ['Bi'], false],
+    ['hus', ['Mus'], false],
+    ['hund', ['Katt'], false],
+  ])
+    assert.strictEqual(S.guessMatches(g, n), ok, `${g} mot ${n}`);
+  // Zoomen i ett rum: tre gissningar, rätt slår fel, tidigt rätt slår sent rätt.
   const room = new Room('ZOO', () => {});
   const ps = ['A', 'B', 'C'].map((n, i) => room.addOrRejoin({ name: n, emoji: ['🦊', '🐼', '🐸'][i] }).player);
   room.plan = buildPlan(ps.map((p) => p.id), { segments: ['zoom'] });
   room.roundIndex = -1;
   room.nextRound();
   room.startRound();
-  const sp = room.round.spec;
-  room.round.answers.set(ps[0].id, { choice: (sp.correct + 1) % 4, at: room.round.playStart + 100, locked: true });
-  room.round.answers.set(ps[1].id, { choice: sp.correct, at: room.round.playStart + 9000, locked: true });
-  room.round.answers.set(ps[2].id, { choice: sp.correct, at: room.round.playStart + 3000, locked: true });
-  room.endPlay();
+  const name = room.round.spec.animal.name;
+  for (const t of ['xxx', 'yyy']) assert.deepStrictEqual(room.zoomGuess(ps[0].id, { text: t }).right, false);
+  assert.strictEqual(room.zoomGuess(ps[0].id, { text: 'zzz' }).left, 0, 'tre gissningar');
+  assert.strictEqual(room.zoomGuess(ps[0].id, { text: name }).right, false, 'efter tre gissningar är det låst');
+  assert.strictEqual(room.zoomGuess(ps[2].id, { text: name.toLowerCase() + 'en' }).right, true);
+  // C gissade rätt först. B gissar rätt nu, sist av alla, och då avslutas omgången av sig själv.
+  room.round.answers.get(ps[2].id).at = room.round.playStart - 1;
+  room.zoomGuess(ps[1].id, { text: 'fel' });
+  assert.strictEqual(room.zoomGuess(ps[1].id, { text: name }).right, true);
+  assert.strictEqual(room.phase, 'reveal', 'när alla är klara går spelet vidare');
   const place = Object.fromEntries(room.round.results.map((x) => [x.id, x.place]));
   assert.deepStrictEqual([place[ps[2].id], place[ps[1].id], place[ps[0].id]], [1, 2, 3]);
   clearTimeout(room.timer);

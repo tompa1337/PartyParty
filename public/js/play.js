@@ -299,14 +299,57 @@
     if (r.type === 'pussel') return playPussel(s);
     if (r.type === 'labyrint') return playLabyrint(s);
     if (r.type === 'kanot') return playKanot(s);
-    if (r.type === 'zoom' || r.type === 'emoji') return playChoice(s);
+    if (r.type === 'zoom') return playZoom(s);
+    if (r.type === 'emoji') return playChoice(s);
     if (r.type === 'bomb') return playBomb(s);
   }
 
-  // Zoomen och Emojigåtan: fyra alternativ, svaret låses direkt.
+  // Zoomen: skriv vilket djur det är. Tre gissningar, svaret rättas direkt.
+  function playZoom(s) {
+    const r = s.round;
+    const a = s.myAnswer || { guesses: [] };
+    let left = r.guessesMax - a.guesses.length;
+    app.innerHTML = `
+      <p class="lead" style="margin:0"><b>Vilket djur är det?</b> Titta på TV:n.</p>
+      <p class="soft" style="margin:0" id="zl">${left} ${left === 1 ? 'gissning' : 'gissningar'} kvar. Tidigt rätt svar slår sent.</p>
+      <input id="zg" type="text" maxlength="30" autocomplete="off" autocapitalize="sentences" enterkeyhint="send" placeholder="Skriv ett djur">
+      <p class="err" id="zf">${a.guesses.length ? `Inte ${esc(a.guesses[a.guesses.length - 1])}.` : ''}</p>
+      <div class="guesses" id="zp">${a.guesses.map((g) => `<s>${esc(g)}</s>`).join(' ')}</div>
+      <button class="full" id="zs" style="margin-top:auto" disabled>Gissa</button>`;
+    const input = $('#zg');
+    const send = $('#zs');
+    input.addEventListener('input', () => (send.disabled = !input.value.trim()));
+    const submit = () => {
+      const text = input.value.trim();
+      if (!text) return;
+      send.disabled = true;
+      socket.emit('player:guess', { text }, (res) => {
+        if (!res) return;
+        if (res.right) {
+          if (navigator.vibrate) navigator.vibrate([60, 40, 120]);
+          return waitingScreen('<span class="mark">Rätt!</span>', `Det var <b>${esc(text)}</b>. Väntar på de andra.`);
+        }
+        if (navigator.vibrate) navigator.vibrate(150);
+        if (res.left <= 0) return waitingScreen('Slut på gissningar', `Inte ${esc(text)} heller. Svaret visas snart på TV:n.`);
+        left = res.left;
+        $('#zf').textContent = `Inte ${text}. Försök igen!`;
+        $('#zl').textContent = `${left} ${left === 1 ? 'gissning' : 'gissningar'} kvar.`;
+        $('#zp').insertAdjacentHTML('beforeend', ` <s>${esc(text)}</s>`);
+        input.value = '';
+        input.focus();
+      });
+    };
+    send.addEventListener('click', submit);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') submit();
+    });
+    input.focus();
+  }
+
+  // Emojigåtan: fyra alternativ, svaret låses direkt.
   function playChoice(s) {
     const r = s.round;
-    const q = r.type === 'zoom' ? 'Vilket djur är det?' : `${esc(r.category)}: vad är det?`;
+    const q = `${esc(r.category)}: vad är det?`;
     app.innerHTML = `
       <p class="lead" style="margin:0"><b>${q}</b></p>
       <p class="soft" style="margin:0">Titta på TV:n. Tidigt rätt svar slår sent, men fel svar ger sista plats.</p>
@@ -721,7 +764,11 @@
   function lockedScreen(r, a) {
     let txt = 'Väntar på de andra.';
     if (r.type === 'final') txt = `Du svarade ${'ABCD'[a.choice]}. Väntar på de andra.`;
-    if ((r.type === 'zoom' || r.type === 'emoji') && r.options) txt = `Du svarade <b>${esc(r.options[a.choice])}</b>. Väntar på de andra.`;
+    if (r.type === 'emoji' && r.options) txt = `Du svarade <b>${esc(r.options[a.choice])}</b>. Väntar på de andra.`;
+    if (r.type === 'zoom') {
+      if (a.right) return waitingScreen('<span class="mark">Rätt!</span>', 'Väntar på de andra.');
+      return waitingScreen('Slut på gissningar', 'Svaret visas snart på TV:n.');
+    }
     if (r.type === 'narmast') txt = `Ditt svar: ${a.value}. Väntar på de andra.`;
     if (r.type === 'king') txt = `Ditt svar: <b>${esc(a.text)}</b>. Väntar på de andra.`;
     waitingScreen('Låst!', txt);

@@ -147,7 +147,34 @@ function answersMatch(a, b) {
   return sa.length > 0 && sa === stemAnswer(b);
 }
 
+// Zoomen: stämmer en skriven gissning med något av de godkända namnen?
+// Stora/små bokstäver, prickar, ändelser (giraffen, en giraff) och små stavfel spelar ingen roll.
+function editDistance(a, b) {
+  const dp = Array.from({ length: a.length + 1 }, (_, i) => [i, ...new Array(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) dp[0][j] = j;
+  for (let i = 1; i <= a.length; i++)
+    for (let j = 1; j <= b.length; j++)
+    {
+      dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      // Två bokstäver i fel ordning räknas som ett fel (girraf → giraff).
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) dp[i][j] = Math.min(dp[i][j], dp[i - 2][j - 2] + 1);
+    }
+  return dp[a.length][b.length];
+}
+function guessMatches(guess, names) {
+  const words = (t) => normAnswer(t).replace(/^(en|ett|a|an|the) /, '');
+  const g = words(guess);
+  if (!g) return false;
+  return names.some((n) => {
+    const t = words(n);
+    if (g === t || stemAnswer(g) === stemAnswer(t)) return true;
+    const tol = t.length <= 3 ? 0 : t.length <= 7 ? 1 : 2;
+    return editDistance(g, t) <= tol || editDistance(stemAnswer(g), stemAnswer(t)) <= tol;
+  });
+}
+
 module.exports = {
+  guessMatches,
   haversineKm,
   skissDistanceFactor,
   skissTimeFactor,

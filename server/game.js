@@ -101,7 +101,7 @@ const SEGMENTS = {
   },
   zoom: {
     title: 'Zoomen',
-    rules: ['Ett djur visas extremt inzoomat och zoomar sakta ut', 'Välj rätt djur i mobilen', 'Rätt svar vinner, och ju tidigare desto bättre'],
+    rules: ['Ett djur visas extremt inzoomat och zoomar sakta ut', 'Skriv vilket djur det är i mobilen. Du har tre gissningar', 'Rätt svar vinner, och ju tidigare desto bättre'],
   },
   emoji: {
     title: 'Emojigåtan',
@@ -258,9 +258,9 @@ function fourOptions(right, pool, sameGroup) {
   return { options, correct: options.indexOf(right) };
 }
 
+const ZOOM_GUESSES = 3;
 function zoomRound(animal) {
-  const { options, correct } = fourOptions(animal, zoomAnimals, (x) => x.group === animal.group);
-  return { animal, img: TW.file(animal.emoji), options: options.map((x) => x.name), correct };
+  return { animal, img: TW.file(animal.emoji), names: [animal.name, ...(animal.alt || [])] };
 }
 
 function emojiRound(riddle) {
@@ -596,7 +596,6 @@ class Room {
         r.answers.set(playerId, { value: S.clamp(v, 0, 1000), at: now, locked: !!data.lock });
         break;
       }
-      case 'zoom':
       case 'emoji': {
         const c = Number(data.choice);
         if (!(c >= 0 && c < r.spec.options.length)) return;
@@ -715,6 +714,26 @@ class Room {
       M.step(mz, ball, { x: xIn, y: yIn }, Math.min(dtMs, 250), BALL_SPEED);
       if (M.inGoal(mz, ball)) ball.finishedAt = now;
     });
+  }
+
+  // ---------- zoomen ----------
+
+  // En skriven gissning. Svaret går direkt tillbaka så att mobilen kan säga rätt eller fel.
+  zoomGuess(playerId, { text }) {
+    const r = this.round;
+    if (this.phase !== 'play' || !r || r.type !== 'zoom' || !this.players.has(playerId)) return null;
+    const t = String(text || '').replace(/\s+/g, ' ').trim().slice(0, 30);
+    if (!t) return null;
+    const a = r.answers.get(playerId) || { guesses: [], right: false, locked: false, at: null };
+    if (a.locked) return { right: a.right, left: 0 };
+    a.guesses.push(t);
+    a.at = Date.now();
+    a.right = S.guessMatches(t, r.spec.names);
+    a.locked = a.right || a.guesses.length >= ZOOM_GUESSES;
+    r.answers.set(playerId, a);
+    this.changed();
+    this.checkProgress();
+    return { right: a.right, left: ZOOM_GUESSES - a.guesses.length };
   }
 
   // ---------- kanotracet ----------
@@ -987,7 +1006,17 @@ class Room {
               detail: { solved: !!st.solvedAt, ms: ms == null ? null : Math.round(ms / SCALE), correct, moves: st.moves },
             };
           }
-          case 'zoom':
+          case 'zoom': {
+            // Rätt svar går alltid före fel. Bland rätt svar vinner den som gissade rätt tidigast.
+            if (!a) return { ...base, perf: -1, tiebreak: Infinity, detail: null };
+            const ms = a.at - r.playStart;
+            return {
+              ...base,
+              perf: a.right ? 1 : 0,
+              tiebreak: a.right ? ms : 0,
+              detail: { guesses: a.guesses, right: a.right, ms: Math.round(ms / SCALE) },
+            };
+          }
           case 'emoji': {
             // Rätt svar går alltid före fel. Bland rätt svar vinner den som svarade tidigast.
             if (!a) return { ...base, perf: -1, tiebreak: Infinity, detail: null };
@@ -1326,14 +1355,13 @@ class Room {
         return o;
       }
       case 'zoom': {
-        const o = { type: 'zoom' };
-        if (this.phase === 'play' || reveal) o.options = spec.options;
+        const o = { type: 'zoom', guessesMax: ZOOM_GUESSES };
         if (this.phase === 'play') {
           o.elapsedMs = Math.round((now - r.playStart) / SCALE);
           o.zoomMs = DUR.zoom;
           if (forTv) o.img = spec.img;
         }
-        if (reveal) Object.assign(o, { img: spec.img, correct: spec.correct, name: spec.animal.name });
+        if (reveal) Object.assign(o, { img: spec.img, name: spec.animal.name });
         return o;
       }
       case 'emoji': {

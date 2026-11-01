@@ -220,6 +220,7 @@
     if (s.phase === 'play' && s.round && s.round.type === 'labyrint') return updateLabyrint(s);
     if (s.phase === 'play' && s.round && s.round.type === 'kanot') return updateKanot(s);
     if (s.phase === 'play' && s.round && s.round.type === 'bomb') return updateBomb(s);
+    if (s.phase === 'play' && s.round && s.round.type === 'zoom') return updateZoomWho(s);
     if (s.phase === 'vote') return buildVote(s);
     if (s.phase === 'reveal') {
       const w = stage.querySelector('.res .wait span');
@@ -349,11 +350,12 @@
       stage.innerHTML = `
         <div class="zoom-stage">
           <div class="zoom-view sheet" id="zv"></div>
-          <div><p class="prompt" style="font-size:3rem">Vilket djur är det?</p>
-            <div class="opts one">${optsHtml(r.options)}</div>
-            <p class="sub">Svara i mobilen. Tidigt rätt svar slår sent.</p></div>
+          <div><p class="prompt" style="font-size:3.4rem">Vilket djur är det?</p>
+            <p class="sub">Skriv ditt svar i mobilen. Du har ${r.guessesMax} gissningar, och tidigt rätt slår sent.</p>
+            <div class="zoom-who" id="zw"></div></div>
         </div>`;
       startZoom($('#zv'), r, s.roundIndex);
+      updateZoomWho(s);
     } else if (r.type === 'emoji') {
       stage.innerHTML = `
         <p class="kicker emo-cat"><span class="mark">${esc(r.category)}</span></p>
@@ -435,6 +437,17 @@
           `<div class="opt sheet ${correct == null ? '' : i === correct ? 'right' : 'wrong'}"><span class="k">${'ABCD'[i]}</span>${esc(o)}${who ? `<span class="who">${who(i)}</span>` : ''}</div>`
       )
       .join('');
+  }
+
+  // Vilka som är klara (rätt eller slut på gissningar). Vad de skrev visas först i resultatet.
+  function updateZoomWho(s) {
+    setHtml(
+      $('#zw'),
+      s.players
+        .filter((p) => p.connected)
+        .map((p) => `<span class="chip sheet ${p.status === 'done' ? 'done' : ''}">${esc(p.emoji)} ${esc(p.name)} ${p.status === 'done' ? 'klar' : '…'}</span>`)
+        .join('')
+    );
   }
 
   // Bilden läggs in som SVG och zoomas genom att krympa viewBox, så att den är skarp hela vägen.
@@ -862,6 +875,9 @@
           ? `Löst på ${(d.ms / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })} s <span class="soft">· ${d.moves} drag</span>`
           : `${d.correct} av 8 rätt <span class="soft">· ej löst</span>`;
       case 'zoom':
+        return `${d.guesses.map((g, i) => (i === d.guesses.length - 1 && d.right ? `<b class="ok">${esc(g)}</b>` : `<s class="soft">${esc(g)}</s>`)).join(' ')}${
+          d.right ? ` <span class="soft">· ${(d.ms / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })} s</span>` : ''
+        }`;
       case 'emoji':
         return `${'ABCD'[d.choice]}. ${esc(round.options[d.choice])} ${d.right ? `<span class="ok">rätt</span>` : `<span class="bad">fel</span>`} <span class="soft">· ${(d.ms / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })} s</span>`;
       case 'kanot':
@@ -978,7 +994,9 @@
         r.type === 'zoom'
           ? `<div class="zoom-view small sheet"><img src="/vendor/twemoji/${esc(r.img)}" alt=""></div>`
           : `<div class="emo-row small">${r.imgs.map((f) => `<img class="on" src="/vendor/twemoji/${esc(f)}" alt="">`).join('')}</div>`;
-      left = `<h2><span class="mark">${esc(r.type === 'zoom' ? r.name : r.answer)}</span></h2>${pic}<div class="opts one">${optsHtml(r.options, r.correct, who)}</div>`;
+      left = `<h2><span class="mark">${esc(r.type === 'zoom' ? r.name : r.answer)}</span></h2>${pic}${
+        r.type === 'zoom' ? '' : `<div class="opts one">${optsHtml(r.options, r.correct, who)}</div>`
+      }`;
     } else if (r.type === 'kanot') {
       const order = [...r.boats.map((b, i) => ({ ...b, team: i }))].sort((a, b) => (a.finished !== b.finished ? (a.finished ? -1 : 1) : a.finished ? a.ms - b.ms : b.x - a.x));
       const best = order[0];

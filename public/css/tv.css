@@ -251,7 +251,10 @@ body.tv.wide #rail-wrap { display: none; }
 .zoom-stage { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 2.4rem; align-items: center; flex: 1; min-height: 0; }
 .zoom-view { aspect-ratio: 1; max-height: 64vh; width: 100%; overflow: hidden; background: #f7f3ff; padding: 0; border-radius: 26px; }
 .zoom-view svg, .zoom-view img { display: block; width: 100%; height: 100%; }
-.zoom-view.small { max-width: 14rem; padding: 1rem; }
+.zoom-view.small { max-width: 22rem; padding: 1.4rem; }
+.zoom-who { display: flex; flex-wrap: wrap; gap: .7rem; margin-top: 2rem; }
+.zoom-who .chip { padding: .5rem 1rem; font-size: 1.3rem; border-radius: 999px; }
+.zoom-who .chip.done { box-shadow: inset 0 0 0 2px var(--glow); }
 .opts.one { grid-template-columns: 1fr; gap: .8rem; }
 .opts.one .opt { font-size: 1.7rem; padding: .9rem 1.3rem; }
 
