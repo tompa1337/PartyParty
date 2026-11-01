@@ -166,8 +166,9 @@ function swipeStep(s, st, behaviour) {
   console.log('Slutställning:', final.standings.map((s) => `${s.name} ${s.points}`).join(' | '));
 
   assert.strictEqual(final.standings.length, N);
+  assert(!seenPhases.has('warmup'), 'vanliga partier ska inte ha uppvärmningsfrågan');
   for (const t of ['skiss', 'ordning', 'narmast', 'pussel', 'swipe', 'king', 'final']) assert(seenTypes.has(t), `segment ${t} spelades inte`);
-  for (const ph of ['countdown', 'warmup', 'warmup-reveal', 'segment-intro', 'round-ready', 'bet', 'play', 'reveal', 'podium']) {
+  for (const ph of ['countdown', 'segment-intro', 'round-ready', 'bet', 'play', 'reveal', 'podium']) {
     assert(seenPhases.has(ph), `fas ${ph} saknas`);
   }
   assert(final.standings.every((s) => s.points >= 0));

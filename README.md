@@ -16,7 +16,6 @@ I **finalen** satsar man före varje fråga, från 0 till allt man har. Alla ran
 
 | Del | Omgångar | Vad man gör |
 | --- | --- | --- |
-| Uppvärmning | 1 | En fråga utan poäng, så att alla lär sig mobilen |
 | Skissen | 3 | En känd plats ritas upp streck för streck. Sätt en nål på världskartan. Poäng efter avstånd och hur tidigt man låste |
 | Ordningen | 3 | Sortera fem uppfinningar från äldst till nyast |
 | Kanotracet | 1 | Lag om två. En paddlar på vänster sida och en på höger genom att trycka i mobilen. Paddlar man i otakt svänger kanoten och kan köra in i strandkanten. Först i mål vinner, annars laget som kommit längst |
@@ -83,7 +82,7 @@ Allt innehåll ligger i `content/` och är lätt att bygga ut:
 - `narmast.js`: frågor med svar mellan 0 och 1000
 - `swipe.js`: kategoripar med ord. Orden ska kunna förväxlas, men inget ord får innehålla kategorins namn eller passa på båda sidorna
 - `final.js`: finalfrågor med kategori och fyra alternativ
-- `warmup.js`: uppvärmningsfrågor
+- `warmup.js`: uppvärmningsfrågor (används bara om man väljer Uppvärmning på testsidan)
 - `king.js`: uppmaningar till Kingen
 - `puzzles.js`: bilder till Pusslet, ritade som SVG i en ruta på 300 × 300
 

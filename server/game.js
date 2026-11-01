@@ -368,7 +368,8 @@ class Room {
     this.plan = buildPlan([...this.players.keys()], test);
     this.roundIndex = -1;
     this.lastResults = null;
-    const skipWarmup = this.test && !this.test.segments.includes('warmup');
+    // Uppvärmningsfrågan finns bara kvar som val på testsidan. Vanliga partier börjar direkt.
+    const skipWarmup = !this.test || !this.test.segments.includes('warmup');
     this.setPhase('countdown', T(DUR.countdown), () => (skipWarmup ? this.nextRound() : this.startWarmup()));
   }
 
