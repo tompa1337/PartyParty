@@ -101,7 +101,7 @@ const SEGMENTS = {
   },
   zoom: {
     title: 'Zoomen',
-    rules: ['Ett djur visas extremt inzoomat och zoomar sakta ut', 'Skriv vilket djur det är i mobilen. Du har tre gissningar', 'Rätt svar vinner, och ju tidigare desto bättre'],
+    rules: ['Ett djur visas extremt inzoomat och zoomar sakta ut', 'Skriv vilket djur det är i mobilen. Du har en gissning', 'Rätt svar vinner, och ju tidigare desto bättre'],
   },
   emoji: {
     title: 'Emojigåtan',
@@ -258,7 +258,7 @@ function fourOptions(right, pool, sameGroup) {
   return { options, correct: options.indexOf(right) };
 }
 
-const ZOOM_GUESSES = 3;
+const ZOOM_GUESSES = 1;
 function zoomRound(animal) {
   return { animal, img: TW.file(animal.emoji), names: [animal.name, ...(animal.alt || [])] };
 }

@@ -155,7 +155,7 @@ function teamRoom(type) {
     ['hund', ['Katt'], false],
   ])
     assert.strictEqual(S.guessMatches(g, n), ok, `${g} mot ${n}`);
-  // Zoomen i ett rum: tre gissningar, rätt slår fel, tidigt rätt slår sent rätt.
+  // Zoomen i ett rum: en gissning, rätt slår fel, tidigt rätt slår sent rätt.
   const room = new Room('ZOO', () => {});
   const ps = ['A', 'B', 'C'].map((n, i) => room.addOrRejoin({ name: n, emoji: ['🦊', '🐼', '🐸'][i] }).player);
   room.plan = buildPlan(ps.map((p) => p.id), { segments: ['zoom'] });
@@ -163,13 +163,11 @@ function teamRoom(type) {
   room.nextRound();
   room.startRound();
   const name = room.round.spec.animal.name;
-  for (const t of ['xxx', 'yyy']) assert.deepStrictEqual(room.zoomGuess(ps[0].id, { text: t }).right, false);
-  assert.strictEqual(room.zoomGuess(ps[0].id, { text: 'zzz' }).left, 0, 'tre gissningar');
-  assert.strictEqual(room.zoomGuess(ps[0].id, { text: name }).right, false, 'efter tre gissningar är det låst');
+  assert.strictEqual(room.zoomGuess(ps[0].id, { text: 'xxx' }).left, 0, 'en gissning');
+  assert.strictEqual(room.zoomGuess(ps[0].id, { text: name }).right, false, 'efter en gissning är det låst');
   assert.strictEqual(room.zoomGuess(ps[2].id, { text: name.toLowerCase() + 'en' }).right, true);
   // C gissade rätt först. B gissar rätt nu, sist av alla, och då avslutas omgången av sig själv.
   room.round.answers.get(ps[2].id).at = room.round.playStart - 1;
-  room.zoomGuess(ps[1].id, { text: 'fel' });
   assert.strictEqual(room.zoomGuess(ps[1].id, { text: name }).right, true);
   assert.strictEqual(room.phase, 'reveal', 'när alla är klara går spelet vidare');
   const place = Object.fromEntries(room.round.results.map((x) => [x.id, x.place]));

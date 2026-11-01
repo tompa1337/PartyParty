@@ -19,7 +19,7 @@ I **finalen** satsar man före varje fråga, från 0 till allt man har. Alla ran
 | Skissen | 3 | En känd plats ritas upp streck för streck. Sätt en nål på världskartan. Poäng efter avstånd och hur tidigt man låste |
 | Ordningen | 3 | Sortera fem uppfinningar från äldst till nyast |
 | Kanotracet | 1 | Lag om två. En paddlar på vänster sida och en på höger genom att trycka i mobilen. Paddlar man i otakt svänger kanoten och kan köra in i strandkanten. Först i mål vinner, annars laget som kommit längst |
-| Zoomen | 3 | Ett djur visas extremt inzoomat och zoomar sakta ut. Skriv vilket djur det är, tre gissningar. Ändelser, små stavfel och vanliga andra namn (kossa, orangutan) godkänns. Rätt svar vinner, och tidigt rätt slår sent rätt |
+| Zoomen | 3 | Ett djur visas extremt inzoomat och zoomar sakta ut. Skriv vilket djur det är, en gissning. Ändelser, små stavfel och vanliga andra namn (kossa, orangutan) godkänns. Rätt svar vinner, och tidigt rätt slår sent rätt |
 | Mellan 0–1000 | 3 | Svaret ligger alltid mellan 0 och 1000. Dra reglaget, närmast vinner |
 | Pusslet | 1 | Klassiskt pussel med 9 rutor, en tom. Alla får samma bild och samma blandning. Snabbast löst vinner, hinner ingen vinner flest brickor på rätt plats |
 | Labyrinten | 1 | Bara med jämnt antal spelare. Lagen om två lottas. Alla lag kör samma labyrint på TV:n, en i laget styr bollen vänster–höger och den andra upp–ner. Först i mål vinner, annars laget närmast målet. Lagkamraterna delar på poängen |

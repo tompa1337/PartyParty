@@ -84,7 +84,7 @@ function hello(cookie, test) {
         if (t === 'ordning') s.emit('player:answer', { order: st.round.items.map((i) => i.id), lock: true });
         if (t === 'narmast') s.emit('player:answer', { value: 500, lock: true });
         if (t === 'final' || t === 'emoji') s.emit('player:answer', { choice: 0 });
-        if (t === 'zoom') ['Hund', 'Katt', 'Ko'].forEach((text) => s.emit('player:guess', { text }));
+        if (t === 'zoom') s.emit('player:guess', { text: 'Hund' });
         if (t === 'king') {
           assert(st.round.isKing, 'i testläget ska den riktiga spelaren vara kingen');
           s.emit('player:answer', { text: 'Näsa' });

@@ -195,13 +195,10 @@ function play(room, p, key, r) {
       return later(room, p, key, rand(3000, 9000), () => room.answer(p.id, { text }));
     }
     case 'zoom': {
-      // Botar gissar en eller två gånger, oftast rätt till slut.
+      // Botar gissar en gång, oftast rätt.
       const wrong = ['Hund', 'Häst', 'Fisk', 'Fågel', 'Björn'];
       const ms = () => rand(4000, 14000) * Number(process.env.TIME_SCALE || 1);
-      return later(room, p, key, ms(), () => {
-        const res = room.zoomGuess(p.id, { text: chance(0.55) ? spec.animal.name : pickOne(wrong) });
-        if (res && !res.right && res.left > 0) setTimeout(() => room.zoomGuess(p.id, { text: chance(0.6) ? spec.animal.name : pickOne(wrong) }), ms() / 2);
-      });
+      return later(room, p, key, ms(), () => room.zoomGuess(p.id, { text: chance(0.65) ? spec.animal.name : pickOne(wrong) }));
     }
     case 'emoji': {
       const choice = chance(0.7) ? spec.correct : Math.floor(Math.random() * spec.options.length);

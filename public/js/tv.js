@@ -351,7 +351,7 @@
         <div class="zoom-stage">
           <div class="zoom-view sheet" id="zv"></div>
           <div><p class="prompt" style="font-size:3.4rem">Vilket djur är det?</p>
-            <p class="sub">Skriv ditt svar i mobilen. Du har ${r.guessesMax} gissningar, och tidigt rätt slår sent.</p>
+            <p class="sub">Skriv ditt svar i mobilen. En gissning, och tidigt rätt slår sent. Fel svar ger sista plats.</p>
             <div class="zoom-who" id="zw"></div></div>
         </div>`;
       startZoom($('#zv'), r, s.roundIndex);

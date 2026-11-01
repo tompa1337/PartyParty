@@ -311,7 +311,7 @@
     let left = r.guessesMax - a.guesses.length;
     app.innerHTML = `
       <p class="lead" style="margin:0"><b>Vilket djur är det?</b> Titta på TV:n.</p>
-      <p class="soft" style="margin:0" id="zl">${left} ${left === 1 ? 'gissning' : 'gissningar'} kvar. Tidigt rätt svar slår sent.</p>
+      <p class="soft" style="margin:0" id="zl">${left > 1 ? `${left} gissningar kvar.` : 'En gissning, så var säker!'} Tidigt rätt svar slår sent.</p>
       <input id="zg" type="text" maxlength="30" autocomplete="off" autocapitalize="sentences" enterkeyhint="send" placeholder="Skriv ett djur">
       <p class="err" id="zf">${a.guesses.length ? `Inte ${esc(a.guesses[a.guesses.length - 1])}.` : ''}</p>
       <div class="guesses" id="zp">${a.guesses.map((g) => `<s>${esc(g)}</s>`).join(' ')}</div>
@@ -330,7 +330,7 @@
           return waitingScreen('<span class="mark">Rätt!</span>', `Det var <b>${esc(text)}</b>. Väntar på de andra.`);
         }
         if (navigator.vibrate) navigator.vibrate(150);
-        if (res.left <= 0) return waitingScreen('Slut på gissningar', `Inte ${esc(text)} heller. Svaret visas snart på TV:n.`);
+        if (res.left <= 0) return waitingScreen('Fel', `Det var inte ${esc(text)}. Svaret visas snart på TV:n.`);
         left = res.left;
         $('#zf').textContent = `Inte ${text}. Försök igen!`;
         $('#zl').textContent = `${left} ${left === 1 ? 'gissning' : 'gissningar'} kvar.`;
@@ -767,7 +767,7 @@
     if (r.type === 'emoji' && r.options) txt = `Du svarade <b>${esc(r.options[a.choice])}</b>. Väntar på de andra.`;
     if (r.type === 'zoom') {
       if (a.right) return waitingScreen('<span class="mark">Rätt!</span>', 'Väntar på de andra.');
-      return waitingScreen('Slut på gissningar', 'Svaret visas snart på TV:n.');
+      return waitingScreen('Fel', 'Svaret visas snart på TV:n.');
     }
     if (r.type === 'narmast') txt = `Ditt svar: ${a.value}. Väntar på de andra.`;
     if (r.type === 'king') txt = `Ditt svar: <b>${esc(a.text)}</b>. Väntar på de andra.`;
