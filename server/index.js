@@ -19,6 +19,7 @@ app.use(express.static(path.join(ROOT, 'public'), { extensions: ['html'] }));
 app.use('/vendor/leaflet', express.static(path.join(ROOT, 'node_modules/leaflet/dist')));
 app.use('/vendor/world', express.static(path.join(ROOT, 'node_modules/world-atlas'), { maxAge: '7d' }));
 app.use('/vendor/topojson', express.static(path.join(ROOT, 'node_modules/topojson-client/dist')));
+app.use('/vendor/twemoji', express.static(path.join(ROOT, 'node_modules/@twemoji/svg'), { maxAge: '30d' }));
 app.use('/vendor/sortable', express.static(path.join(ROOT, 'node_modules/sortablejs')));
 app.use('/vendor/fonts/bricolage', express.static(path.join(ROOT, 'node_modules/@fontsource-variable/bricolage-grotesque')));
 app.use('/vendor/fonts/figtree', express.static(path.join(ROOT, 'node_modules/@fontsource/figtree')));

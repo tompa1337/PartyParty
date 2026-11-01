@@ -299,7 +299,25 @@
     if (r.type === 'pussel') return playPussel(s);
     if (r.type === 'labyrint') return playLabyrint(s);
     if (r.type === 'kanot') return playKanot(s);
+    if (r.type === 'zoom' || r.type === 'emoji') return playChoice(s);
     if (r.type === 'bomb') return playBomb(s);
+  }
+
+  // Zoomen och Emojigåtan: fyra alternativ, svaret låses direkt.
+  function playChoice(s) {
+    const r = s.round;
+    const q = r.type === 'zoom' ? 'Vilket djur är det?' : `${esc(r.category)}: vad är det?`;
+    app.innerHTML = `
+      <p class="lead" style="margin:0"><b>${q}</b></p>
+      <p class="soft" style="margin:0">Titta på TV:n. Tidigt rätt svar slår sent, men fel svar ger sista plats.</p>
+      <div class="opts-phone">${r.options.map((o, i) => `<button data-i="${i}">${'ABCD'[i]}. ${esc(o)}</button>`).join('')}</div>`;
+    app.querySelectorAll('.opts-phone button').forEach((b) =>
+      b.addEventListener('click', () => {
+        const i = Number(b.dataset.i);
+        socket.emit('player:answer', { choice: i });
+        waitingScreen('Låst!', `Du svarade <b>${esc(r.options[i])}</b>. Väntar på de andra.`);
+      })
+    );
   }
 
   function teamIntro(s) {
@@ -639,7 +657,7 @@
           ? `<h1 class="title-sm"><span class="mark">👑 Du är kingen!</span></h1>
              <p class="lead" style="margin:0">Skriv det du tror att någon annan också skriver. Du får <b class="ok">+100</b> för varje spelare som skriver samma.</p>`
           : `<p class="lead" style="margin:0">Kingen är <b>👑 ${esc(r.kingEmoji)} ${esc(r.kingName)}</b></p>
-             <p class="soft" style="margin:0">Skriv något, men inte samma som kingen. Samma ger <b class="bad">−100</b>, annat ger <b class="ok">+100</b>.</p>`
+             <p class="soft" style="margin:0">Skriv något som passar, men inte samma som kingen. Samma ger <b class="bad">−100</b>, annat ger <b class="ok">+100</b>. Passar det inte blir det <b class="bad">−100</b>.</p>`
       }
       <p class="king-prompt">${esc(r.prompt)}</p>
       <input id="kt" type="text" maxlength="40" autocomplete="off" autocapitalize="sentences" enterkeyhint="send" placeholder="Skriv ditt svar">
@@ -660,30 +678,42 @@
     input.focus();
   }
 
-  // Kingen: rösta på vilka svar som betyder samma sak som kingens.
+  // Kingen: för varje svar väljer man Annat, Samma (som kingens) eller Passar inte (uppmaningen).
   function buildVote(s) {
     const r = s.round;
     if (r.myVote) return waitingScreen('Röstat!', 'Väntar på de andra.');
-    const yes = new Set();
+    const choice = new Map();
+    const CH = [
+      ['other', 'Annat'],
+      ['same', 'Samma'],
+      ['bad', 'Passar inte'],
+    ];
     app.innerHTML = `
+      <p class="soft" style="margin:0">${esc(r.prompt)}</p>
       <p class="soft" style="margin:0">👑 ${esc(r.kingName)} skrev</p>
       <h1 class="title"><span class="mark">${esc(r.kingText)}</span></h1>
-      <p class="lead" style="margin:0">Tryck på de svar som betyder samma sak.</p>
+      <p class="lead" style="margin:0"><b>Samma</b> om det betyder samma sak som kingens svar. <b>Passar inte</b> om det inte hör till uppmaningen.</p>
       <div class="votes">${r.candidates
-        .map((c) => `<button class="vote" data-id="${esc(c.id)}"><span class="txt">${esc(c.text)}</span><span class="tag">Annat</span></button>`)
+        .map((c) =>
+          c.id === s.me.id
+            ? `<div class="vote3 mine"><span class="txt">${esc(c.text)}</span><span class="soft">Ditt svar</span></div>`
+            : `<div class="vote3" data-id="${esc(c.id)}"><span class="txt">${esc(c.text)}</span><div class="seg">${CH.map(
+                ([k, label]) => `<button data-k="${k}" class="${k === 'other' ? 'on' : ''} k-${k}">${label}</button>`
+              ).join('')}</div></div>`
+        )
         .join('')}</div>
       <button class="full" id="done" style="margin-top:auto">Klar</button>`;
-    app.querySelectorAll('.vote').forEach((b) =>
-      b.addEventListener('click', () => {
-        const id = b.dataset.id;
-        if (yes.has(id)) yes.delete(id);
-        else yes.add(id);
-        b.classList.toggle('on', yes.has(id));
-        b.querySelector('.tag').textContent = yes.has(id) ? 'Samma' : 'Annat';
-      })
+    app.querySelectorAll('.vote3[data-id]').forEach((row) =>
+      row.querySelectorAll('button').forEach((b) =>
+        b.addEventListener('click', () => {
+          choice.set(row.dataset.id, b.dataset.k);
+          row.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+        })
+      )
     );
     $('#done').addEventListener('click', () => {
-      socket.emit('player:vote', { yes: [...yes] });
+      const pick = (k) => [...choice].filter(([, v]) => v === k).map(([id]) => id);
+      socket.emit('player:vote', { yes: pick('same'), bad: pick('bad') });
       waitingScreen('Röstat!', 'Väntar på de andra.');
     });
   }
@@ -691,6 +721,7 @@
   function lockedScreen(r, a) {
     let txt = 'Väntar på de andra.';
     if (r.type === 'final') txt = `Du svarade ${'ABCD'[a.choice]}. Väntar på de andra.`;
+    if ((r.type === 'zoom' || r.type === 'emoji') && r.options) txt = `Du svarade <b>${esc(r.options[a.choice])}</b>. Väntar på de andra.`;
     if (r.type === 'narmast') txt = `Ditt svar: ${a.value}. Väntar på de andra.`;
     if (r.type === 'king') txt = `Ditt svar: <b>${esc(a.text)}</b>. Väntar på de andra.`;
     waitingScreen('Låst!', txt);
@@ -921,6 +952,12 @@
           ? `Löst på ${(d.ms / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })} sekunder med ${d.moves} drag.`
           : `${d.correct} av 8 brickor på rätt plats.`;
       }
+      if (r.type === 'zoom' || r.type === 'emoji') {
+        const facit = esc(r.type === 'zoom' ? r.name : r.answer);
+        what = d.right
+          ? `Rätt, det var <b>${facit}</b>! Du svarade efter ${(d.ms / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })} s.`
+          : `Fel, det var <b>${facit}</b>.`;
+      }
       if (r.type === 'kanot') {
         what = d.finished
           ? `Ni paddlade i mål på ${(d.ms / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })} sekunder.`
@@ -934,6 +971,7 @@
       }
       if (r.type === 'king') {
         if (d.verdict === 'king') what = `Du skrev <b>${esc(d.text || '–')}</b> och ${d.same} skrev samma.`;
+        else if (d.verdict === 'invalid') what = `Du skrev <b>${esc(d.text)}</b>, men de andra tyckte inte att det passade.`;
         else if (d.verdict === 'same') what = `Du skrev <b>${esc(d.text)}</b>, samma som kingens <b>${esc(r.kingText)}</b>.`;
         else if (d.verdict === 'none') what = 'Inget svar den här gången.';
         else what = `Du skrev <b>${esc(d.text)}</b>, inte samma som kingens <b>${esc(r.kingText || '–')}</b>.`;

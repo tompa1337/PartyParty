@@ -194,6 +194,11 @@ function play(room, p, key, r) {
       const text = pickOne(KING_WORDS);
       return later(room, p, key, rand(3000, 9000), () => room.answer(p.id, { text }));
     }
+    case 'zoom':
+    case 'emoji': {
+      const choice = chance(0.7) ? spec.correct : Math.floor(Math.random() * spec.options.length);
+      return later(room, p, key, rand(4000, 16000) * Number(process.env.TIME_SCALE || 1), () => room.answer(p.id, { choice }));
+    }
     case 'final': {
       const choice = chance(0.6) ? spec.q.correct : Math.floor(Math.random() * spec.q.options.length);
       return later(room, p, key, rand(2000, 7000), () => room.answer(p.id, { choice }));

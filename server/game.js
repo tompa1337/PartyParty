@@ -13,6 +13,9 @@ const puzzles = require('../content/puzzles');
 const M = require('./maze');
 const K = require('./kanot');
 const B = require('./bomb');
+const TW = require('./twemoji');
+const zoomAnimals = require('../content/zoom');
+const emojiRiddles = require('../content/emojigator');
 
 const SCALE = Number(process.env.TIME_SCALE || 1);
 const T = (ms) => Math.round(ms * SCALE);
@@ -33,6 +36,10 @@ const DUR = {
   pussel: 120000,
   labyrint: 90000,
   kanot: 80000,
+  zoom: 22000,
+  zoomGrace: 3000,
+  emojiStep: 3500,
+  emojiGrace: 7000,
   bomb: 150000,
   bombFlash: 1500,
   kingVote: 30000,
@@ -92,6 +99,14 @@ const SEGMENTS = {
       'Först i mål vinner. Hinner ingen, vinner laget som kom närmast målet',
     ],
   },
+  zoom: {
+    title: 'Zoomen',
+    rules: ['Ett djur visas extremt inzoomat och zoomar sakta ut', 'Välj rätt djur i mobilen', 'Rätt svar vinner, och ju tidigare desto bättre'],
+  },
+  emoji: {
+    title: 'Emojigåtan',
+    rules: ['Emojis dyker upp en i taget och blir tydligare och tydligare', 'Välj rätt svar i mobilen', 'Rätt svar vinner, och ju tidigare desto bättre'],
+  },
   kanot: {
     title: 'Kanotracet',
     rules: [
@@ -118,6 +133,7 @@ const SEGMENTS = {
       'Alla blir kingen en gång',
       'Kingen skriver det hen tror att någon annan också skriver',
       'Kingen får +100 per spelare som skrev samma, de får −100. Alla andra får +100',
+      'Svaret måste passa uppmaningen. Röstar de andra att det inte passar blir det −100',
     ],
   },
   final: {
@@ -196,7 +212,7 @@ function scramble() {
 }
 
 // Alla delar i programordning. Uppvärmningen ligger utanför planen.
-const SEGMENT_ORDER = ['skiss', 'ordning', 'kanot', 'narmast', 'pussel', 'labyrint', 'swipe', 'bomb', 'king', 'final'];
+const SEGMENT_ORDER = ['skiss', 'ordning', 'kanot', 'zoom', 'narmast', 'pussel', 'labyrint', 'emoji', 'swipe', 'bomb', 'king', 'final'];
 
 // test = null för ett vanligt parti. I testläget: { segments: [...], humanIds: [...] }, en omgång per del.
 function buildPlan(playerIds = [], test = null) {
@@ -208,11 +224,13 @@ function buildPlan(playerIds = [], test = null) {
   // Lagspelen kräver jämnt antal spelare. Lagen lottas om inför varje lagspel.
   const even = playerIds.length >= 2 && playerIds.length % 2 === 0;
   if (want('kanot') && even) plan.push({ type: 'kanot', teams: makeTeams(playerIds) });
+  if (want('zoom')) for (const a of pick(zoomAnimals, n(3))) plan.push({ type: 'zoom', ...zoomRound(a) });
   if (want('narmast')) for (const q of pick(narmastQs, n(3))) plan.push({ type: 'narmast', q });
   if (want('pussel')) plan.push({ type: 'pussel', puzzle: pick(puzzles, 1)[0], start: scramble() });
   if (want('labyrint') && even) {
     plan.push({ type: 'labyrint', maze: M.generate(MAZE_W, MAZE_H), teams: makeTeams(playerIds) });
   }
+  if (want('emoji')) for (const g of pick(emojiRiddles, n(3))) plan.push({ type: 'emoji', ...emojiRound(g) });
   if (want('swipe')) {
     const pair = pick(swipePairs, 1)[0];
     const words = shuffle([
@@ -230,6 +248,24 @@ function buildPlan(playerIds = [], test = null) {
   }
   if (want('final')) for (const q of pick(finalQs, n(5))) plan.push({ type: 'final', q });
   return plan;
+}
+
+// Fyra alternativ där ett är rätt. Felaktiga tas helst från samma grupp, så att de liknar det rätta.
+function fourOptions(right, pool, sameGroup) {
+  const near = shuffle(pool.filter((x) => x !== right && sameGroup(x)));
+  const rest = shuffle(pool.filter((x) => x !== right && !sameGroup(x)));
+  const options = shuffle([right, ...[...near, ...rest].slice(0, 3)]);
+  return { options, correct: options.indexOf(right) };
+}
+
+function zoomRound(animal) {
+  const { options, correct } = fourOptions(animal, zoomAnimals, (x) => x.group === animal.group);
+  return { animal, img: TW.file(animal.emoji), options: options.map((x) => x.name), correct };
+}
+
+function emojiRound(riddle) {
+  const { options, correct } = fourOptions(riddle, emojiRiddles, (x) => x.cat === riddle.cat);
+  return { riddle, imgs: riddle.emojis.map(TW.file), options: options.map((x) => x.answer), correct };
 }
 
 // Lottar lag om två. I varje lag styr den ena vänster–höger (x) och den andra upp–ner (y).
@@ -478,6 +514,12 @@ class Room {
       case 'final':
         this.setPhase('play', T(DUR.finalQuestion), () => this.endPlay());
         break;
+      case 'zoom':
+        this.setPhase('play', T(DUR.zoom + DUR.zoomGrace), () => this.endPlay());
+        break;
+      case 'emoji':
+        this.setPhase('play', T(DUR.emojiStep * (r.spec.imgs.length - 1) + DUR.emojiGrace), () => this.endPlay());
+        break;
       case 'king':
         this.setPhase('play', T(DUR.kingWrite), () => this.endPlay());
         break;
@@ -552,6 +594,13 @@ class Room {
         const v = Math.round(Number(data.value));
         if (!Number.isFinite(v)) return;
         r.answers.set(playerId, { value: S.clamp(v, 0, 1000), at: now, locked: !!data.lock });
+        break;
+      }
+      case 'zoom':
+      case 'emoji': {
+        const c = Number(data.choice);
+        if (!(c >= 0 && c < r.spec.options.length)) return;
+        r.answers.set(playerId, { choice: c, at: now, locked: true });
         break;
       }
       case 'final': {
@@ -760,13 +809,16 @@ class Room {
     return { correct, right };
   }
 
-  // Kingen: varje spelare skickar listan med svar som hen tycker betyder samma som kingens.
+  // Kingen: varje spelare skickar vilka svar som betyder samma som kingens (yes)
+  // och vilka som inte passar uppmaningen alls (bad). Man röstar inte på sitt eget svar.
   vote(playerId, data) {
     const r = this.round;
     if (this.phase !== 'vote' || !r || r.type !== 'king' || !this.players.has(playerId)) return;
-    const allowed = new Set(r.candidates.map((c) => c.id));
-    const yes = Array.isArray(data && data.yes) ? data.yes.filter((x) => allowed.has(x)) : [];
-    r.votes.set(playerId, new Set(yes));
+    const allowed = new Set(r.candidates.map((c) => c.id).filter((id) => id !== playerId));
+    const list = (k) => (Array.isArray(data && data[k]) ? data[k].filter((x) => allowed.has(x)) : []);
+    const bad = new Set(list('bad'));
+    const yes = new Set(list('yes').filter((x) => !bad.has(x)));
+    r.votes.set(playerId, { yes, bad });
     this.changed();
     this.checkProgress();
   }
@@ -935,6 +987,14 @@ class Room {
               detail: { solved: !!st.solvedAt, ms: ms == null ? null : Math.round(ms / SCALE), correct, moves: st.moves },
             };
           }
+          case 'zoom':
+          case 'emoji': {
+            // Rätt svar går alltid före fel. Bland rätt svar vinner den som svarade tidigast.
+            if (!a) return { ...base, perf: -1, tiebreak: Infinity, detail: null };
+            const right = a.choice === r.spec.correct;
+            const ms = a.at - r.playStart;
+            return { ...base, perf: right ? 1 : 0, tiebreak: right ? ms : 0, detail: { choice: a.choice, right, ms: Math.round(ms / SCALE) } };
+          }
           case 'kanot': {
             const t = this.teamOf(p.id);
             if (!t) return { ...base, perf: -1e9, tiebreak: Infinity, detail: null };
@@ -998,7 +1058,9 @@ class Room {
   kingResults(r, players) {
     const kingId = r.spec.kingId;
     const kingA = r.answers.get(kingId);
-    const voters = Math.max(1, this.connectedPlayers().length);
+    // Röster på ett svar räknas bara från de andra, inte från den som skrev det.
+    const votersFor = (pid) => Math.max(1, this.connectedPlayers().filter((x) => x.id !== pid).length);
+    const countVotes = (pid, key) => [...r.votes.entries()].filter(([voter, v]) => voter !== pid && v[key].has(pid)).length;
     let same = 0;
     const rows = [];
     for (const p of players) {
@@ -1009,17 +1071,23 @@ class Room {
         continue;
       }
       let match = false;
+      let invalid = false;
       let voted = null;
       if (kingA) {
         if (S.answersMatch(kingA.text, a.text)) match = true;
         else {
-          const yes = [...r.votes.values()].filter((v) => v.has(p.id)).length;
-          voted = { yes, no: voters - yes };
-          match = yes > voters / 2;
+          const n = votersFor(p.id);
+          const bad = countVotes(p.id, 'bad');
+          const yes = countVotes(p.id, 'yes');
+          voted = { yes, bad, n };
+          // Passar svaret inte uppmaningen enligt majoriteten blir det −100 och räknas inte som träff.
+          if (bad > n / 2) invalid = true;
+          else match = yes > n / 2;
         }
       }
       if (match) same++;
-      rows.push({ id: p.id, bet: null, delta: match ? -100 : 100, detail: { text: a.text, verdict: match ? 'same' : 'different', voted } });
+      const verdict = invalid ? 'invalid' : match ? 'same' : 'different';
+      rows.push({ id: p.id, bet: null, delta: match || invalid ? -100 : 100, detail: { text: a.text, verdict, voted } });
     }
     rows.push({ id: kingId, bet: null, delta: 100 * same, detail: { text: kingA ? kingA.text : null, verdict: 'king', same } });
     // Placering efter vem som tjänade mest i omgången.
@@ -1257,6 +1325,29 @@ class Room {
         }
         return o;
       }
+      case 'zoom': {
+        const o = { type: 'zoom' };
+        if (this.phase === 'play' || reveal) o.options = spec.options;
+        if (this.phase === 'play') {
+          o.elapsedMs = Math.round((now - r.playStart) / SCALE);
+          o.zoomMs = DUR.zoom;
+          if (forTv) o.img = spec.img;
+        }
+        if (reveal) Object.assign(o, { img: spec.img, correct: spec.correct, name: spec.animal.name });
+        return o;
+      }
+      case 'emoji': {
+        const o = { type: 'emoji', category: spec.riddle.cat };
+        if (this.phase === 'play' || reveal) o.options = spec.options;
+        if (this.phase === 'play') {
+          o.elapsedMs = Math.round((now - r.playStart) / SCALE);
+          o.stepMs = DUR.emojiStep;
+          o.count = spec.imgs.length;
+          if (forTv) o.imgs = spec.imgs;
+        }
+        if (reveal) Object.assign(o, { imgs: spec.imgs, correct: spec.correct, answer: spec.riddle.answer });
+        return o;
+      }
       case 'kanot': {
         const o = { type: 'kanot', teams: this.teamsPublic(spec.teams), length: K.LENGTH, half: K.HALF };
         if (this.phase === 'play' || reveal) {
@@ -1354,7 +1445,7 @@ class Room {
         }
         if (this.phase === 'vote') {
           o.candidates = r.candidates;
-          if (p) o.myVote = r.votes.has(p.id) ? [...r.votes.get(p.id)] : null;
+          if (p) o.myVote = r.votes.has(p.id) ? { yes: [...r.votes.get(p.id).yes], bad: [...r.votes.get(p.id).bad] } : null;
         }
         return o;
       }

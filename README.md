@@ -19,12 +19,14 @@ I **finalen** satsar man före varje fråga, från 0 till allt man har. Alla ran
 | Skissen | 3 | En känd plats ritas upp streck för streck. Sätt en nål på världskartan. Poäng efter avstånd och hur tidigt man låste |
 | Ordningen | 3 | Sortera fem uppfinningar från äldst till nyast |
 | Kanotracet | 1 | Lag om två. En paddlar på vänster sida och en på höger genom att trycka i mobilen. Paddlar man i otakt svänger kanoten och kan köra in i strandkanten. Först i mål vinner, annars laget som kommit längst |
+| Zoomen | 3 | Ett djur visas extremt inzoomat och zoomar sakta ut. Välj rätt bland fyra. Rätt svar vinner, och tidigt rätt slår sent rätt |
 | Mellan 0–1000 | 3 | Svaret ligger alltid mellan 0 och 1000. Dra reglaget, närmast vinner |
 | Pusslet | 1 | Klassiskt pussel med 9 rutor, en tom. Alla får samma bild och samma blandning. Snabbast löst vinner, hinner ingen vinner flest brickor på rätt plats |
 | Labyrinten | 1 | Bara med jämnt antal spelare. Lagen om två lottas. Alla lag kör samma labyrint på TV:n, en i laget styr bollen vänster–höger och den andra upp–ner. Först i mål vinner, annars laget närmast målet. Lagkamraterna delar på poängen |
+| Emojigåtan | 3 | En saga, film, barnvisa eller ett ordspråk som emojis. Fler emojis dyker upp hela tiden så att det blir lättare och lättare. Rätt svar vinner, och tidigt slår sent |
 | Höger eller vänster | 1 | 20 ord på 30 sekunder. Flest rätt vinner. Fel svar skakar och spärrar en sekund |
 | Bombdesarmeringen | 1 | Lag om två. En ser bomben (trådar och serienummer) och klipper, den andra har manualen och säger vilken tråd. Rollerna byts efter varje bomb. Flest desarmerade på 2,5 minut vinner, fel tråd smäller |
-| Kingen | en per spelare | Alla blir kingen en gång. Kingen skriver det hen tror att någon annan skriver: +100 per träff. De som skrev samma får −100, alla andra +100. Svar som inte är exakt samma röstar alla om |
+| Kingen | en per spelare | Alla blir kingen en gång. Kingen skriver det hen tror att någon annan skriver: +100 per träff. De som skrev samma får −100, alla andra +100. Svar som inte är exakt samma röstar de andra om: Annat, Samma eller Passar inte. Röstar majoriteten att ett svar inte passar uppmaningen blir det −100 |
 | Finalen | 5 | Jeopardy-stil: se kategorin, satsa, svara snabbt och rätt |
 
 På TV:n går man vidare med **Enter**, mellanslag eller knappen Nästa. Annars går spelet vidare när alla tryckt Nästa i mobilen.
@@ -84,6 +86,8 @@ Allt innehåll ligger i `content/` och är lätt att bygga ut:
 - `final.js`: finalfrågor med kategori och fyra alternativ
 - `warmup.js`: uppvärmningsfrågor (används bara om man väljer Uppvärmning på testsidan)
 - `king.js`: uppmaningar till Kingen
+- `zoom.js`: djuren i Zoomen, med grupp så att felaktiga alternativ liknar det rätta
+- `emojigator.js`: emojigåtor med kategori, emojis i ordning från luddigt till solklart
 - `puzzles.js`: bilder till Pusslet, ritade som SVG i en ruta på 300 × 300
 
 ## Struktur
@@ -106,3 +110,5 @@ test/lagspel.js    Kanotracet och Bombdesarmeringen
 ```
 
 Världskartan ritas från [world-atlas](https://github.com/topojson/world-atlas) (Natural Earth, fri att använda) som följer med appen. Den behöver ingen nyckel och inget konto.
+
+Bilderna i Zoomen och Emojigåtan är [Twemoji](https://github.com/jdecked/twemoji) © Twitter, Inc. och andra, licensierade under [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/). De följer med appen via npm-paketet `@twemoji/svg`.

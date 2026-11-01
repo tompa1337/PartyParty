@@ -15,6 +15,7 @@
   let map = null;
   let lab = null; // Labyrinten: canvas och bollarnas positioner
   let kanot = null; // Kanotracet: canvas, kanoter och plask
+  let anim = null; // Zoomen och Emojigåtan: pågående animation
 
   // Testläge: inställningarna kommer från /test via adressen (?test=...).
   let testOpts = null;
@@ -136,6 +137,7 @@
     sketch = null;
     lab = null;
     kanot = null;
+    anim = null;
     drawStart = null;
     if (map) {
       map.remove();
@@ -343,6 +345,22 @@
         <div class="lab-teams" id="labteams"></div>`;
       startKanot($('#river'), r);
       updateKanot(s);
+    } else if (r.type === 'zoom') {
+      stage.innerHTML = `
+        <div class="zoom-stage">
+          <div class="zoom-view sheet" id="zv"></div>
+          <div><p class="prompt" style="font-size:3rem">Vilket djur är det?</p>
+            <div class="opts one">${optsHtml(r.options)}</div>
+            <p class="sub">Svara i mobilen. Tidigt rätt svar slår sent.</p></div>
+        </div>`;
+      startZoom($('#zv'), r, s.roundIndex);
+    } else if (r.type === 'emoji') {
+      stage.innerHTML = `
+        <p class="kicker emo-cat"><span class="mark">${esc(r.category)}</span></p>
+        <div class="emo-row" id="er">${r.imgs.map((f) => `<img src="/vendor/twemoji/${esc(f)}" alt="">`).join('')}</div>
+        <div class="opts">${optsHtml(r.options)}</div>
+        <p class="sub">Fler emojis kommer hela tiden. Svara i mobilen, tidigt rätt svar slår sent.</p>`;
+      startEmoji($('#er'), r);
     } else if (r.type === 'bomb') {
       stage.innerHTML = `
         <div class="bomb-top"><span class="bomb-ico">💣</span><div><p class="prompt" style="font-size:3rem">Desarmera så många bomber ni hinner</p>
@@ -357,7 +375,7 @@
         <p class="prompt">${esc(r.prompt)}</p>
         <div class="king-rules">
           <div class="sheet"><b>${esc(r.kingName)}</b> skriver det hen tror att någon annan också skriver. <span class="ok">+100</span> per träff.</div>
-          <div class="sheet"><b>Ni andra</b> skriver något, men inte samma som kingen. Samma ger <span class="bad">−100</span>, annat ger <span class="ok">+100</span>.</div>
+          <div class="sheet"><b>Ni andra</b> skriver något som passar, men inte samma som kingen. Samma ger <span class="bad">−100</span>, annat <span class="ok">+100</span>. Passar det inte: <span class="bad">−100</span>.</div>
         </div>
         <p class="sub">${done} av ${n} har skrivit</p>`;
     } else if (r.type === 'final') {
@@ -378,7 +396,8 @@
     stage.innerHTML = `
       <p class="king-who"><span class="crown">👑</span> ${esc(r.kingName)} skrev</p>
       <h1 class="king-answer"><span class="mark">${esc(r.kingText)}</span></h1>
-      <p class="prompt" style="font-size:2.4rem">Räknas något av de här som samma sak?</p>
+      <p class="sub">${esc(r.prompt)}</p>
+      <p class="prompt" style="font-size:2.4rem">Är något samma sak? Passar alla svar uppmaningen?</p>
       <div class="cards">${r.candidates.map((c) => `<div class="card sheet">${esc(c.text)}</div>`).join('')}</div>
       <p class="sub">Rösta i mobilen. Majoriteten avgör. ${done} av ${n} har röstat.</p>`;
   }
@@ -406,6 +425,95 @@
       el.innerHTML = html;
       el.dataset.html = html;
     }
+  }
+
+  // ---------- Zoomen och Emojigåtan ----------
+  function optsHtml(options, correct = null, who = null) {
+    return options
+      .map(
+        (o, i) =>
+          `<div class="opt sheet ${correct == null ? '' : i === correct ? 'right' : 'wrong'}"><span class="k">${'ABCD'[i]}</span>${esc(o)}${who ? `<span class="who">${who(i)}</span>` : ''}</div>`
+      )
+      .join('');
+  }
+
+  // Bilden läggs in som SVG och zoomas genom att krympa viewBox, så att den är skarp hela vägen.
+  const ZOOM_MAX = 14;
+  async function startZoom(box, r, seed) {
+    const me = (anim = {});
+    let svgText;
+    try {
+      svgText = await (await fetch(`/vendor/twemoji/${r.img}`)).text();
+    } catch {
+      return;
+    }
+    if (anim !== me || !box.isConnected) return;
+    box.innerHTML = svgText;
+    const svg = box.querySelector('svg');
+    svg.setAttribute('preserveAspectRatio', 'xMidYMid slice');
+    const focal = await focalPoint(svgText, seed);
+    const start = performance.now() - (r.elapsedMs || 0);
+    const loop = (now) => {
+      if (anim !== me || !box.isConnected) return;
+      const t = Math.min(1, (now - start) / r.zoomMs);
+      const scale = Math.pow(ZOOM_MAX, 1 - t);
+      const w = 36 / scale;
+      const k = (w - 36 / ZOOM_MAX) / (36 - 36 / ZOOM_MAX);
+      const cx = focal.x + (18 - focal.x) * k;
+      const cy = focal.y + (18 - focal.y) * k;
+      svg.setAttribute('viewBox', `${(cx - w / 2).toFixed(3)} ${(cy - w / 2).toFixed(3)} ${w.toFixed(3)} ${w.toFixed(3)}`);
+      if (t < 1) requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  }
+
+  // En punkt på djuret där något händer (kant mellan färger, ett öga), inte en enfärgad yta.
+  // Väljs med ett fast frö så att alla TV-flikar visar samma.
+  function focalPoint(svgText, seed) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const N = 72;
+        const c = document.createElement('canvas');
+        c.width = c.height = N;
+        const ctx = c.getContext('2d');
+        ctx.drawImage(img, 0, 0, N, N);
+        const d = ctx.getImageData(0, 0, N, N).data;
+        const at = (x, y) => (y * N + x) * 4;
+        const solid = (x, y) => d[at(x, y) + 3] > 200;
+        const diff = (x0, y0, x1, y1) => {
+          const a = at(x0, y0);
+          const b = at(x1, y1);
+          return Math.abs(d[a] - d[b]) + Math.abs(d[a + 1] - d[b + 1]) + Math.abs(d[a + 2] - d[b + 2]);
+        };
+        const pts = [];
+        for (let y = 6; y < N - 6; y++)
+          for (let x = 6; x < N - 6; x++) {
+            // Mitt i djuret (helt täckt runt om) och med en färgskiftning i närheten.
+            if (!(solid(x, y) && solid(x - 5, y) && solid(x + 5, y) && solid(x, y - 5) && solid(x, y + 5))) continue;
+            const v = diff(x - 4, y, x + 4, y) + diff(x, y - 4, x, y + 4);
+            if (v > 120) pts.push([x, y]);
+          }
+        if (!pts.length) return resolve({ x: 18, y: 18 });
+        const p = pts[Math.floor(((Math.sin(seed * 9301 + 49297) + 1) / 2) * pts.length) % pts.length];
+        resolve({ x: ((p[0] + 0.5) / N) * 36, y: ((p[1] + 0.5) / N) * 36 });
+      };
+      img.onerror = () => resolve({ x: 18, y: 18 });
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgText);
+    });
+  }
+
+  function startEmoji(row, r) {
+    const me = (anim = {});
+    const imgs = [...row.querySelectorAll('img')];
+    const start = performance.now() - (r.elapsedMs || 0);
+    const loop = (now) => {
+      if (anim !== me || !row.isConnected) return;
+      const shown = Math.min(imgs.length, 1 + Math.floor((now - start) / r.stepMs));
+      imgs.forEach((im, i) => im.classList.toggle('on', i < shown));
+      if (shown < imgs.length) requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
   }
 
   // ---------- Kanotracet ----------
@@ -753,6 +861,9 @@
         return d.solved
           ? `Löst på ${(d.ms / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })} s <span class="soft">· ${d.moves} drag</span>`
           : `${d.correct} av 8 rätt <span class="soft">· ej löst</span>`;
+      case 'zoom':
+      case 'emoji':
+        return `${'ABCD'[d.choice]}. ${esc(round.options[d.choice])} ${d.right ? `<span class="ok">rätt</span>` : `<span class="bad">fel</span>`} <span class="soft">· ${(d.ms / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })} s</span>`;
       case 'kanot':
       case 'bomb': {
         const t = round.teams[d.team];
@@ -775,8 +886,13 @@
       }
       case 'king': {
         if (d.verdict === 'king') return `<b>${esc(d.text || '–')}</b> <span class="soft">· 👑 kingen, ${d.same} träff${d.same === 1 ? '' : 'ar'}</span>`;
-        const vote = d.voted ? ` <span class="soft">· röstat ${d.voted.yes}–${d.voted.no}</span>` : '';
-        const tag = d.verdict === 'same' ? '<span class="bad">samma</span>' : '<span class="ok">annat</span>';
+        const vote = d.voted && d.verdict !== 'invalid' ? ` <span class="soft">· ${d.voted.yes} av ${d.voted.n} sa samma</span>` : '';
+        const tag =
+          d.verdict === 'invalid'
+            ? '<span class="bad">passar inte</span>'
+            : d.verdict === 'same'
+              ? '<span class="bad">samma</span>'
+              : '<span class="ok">annat</span>';
         return `${esc(d.text)} <span class="soft">·</span> ${tag}${vote}`;
       }
       case 'final':
@@ -852,6 +968,17 @@
       const sub = !w ? '' : best.finished ? `I mål på ${secs(best.ms)} sekunder.` : `Lag ${esc(w.name)} kom närmast, ${best.left} steg kvar.`;
       left = `<h2><span class="mark">${title}</span></h2><p class="fact">${sub}</p>
         <div class="lab-wrap mini"><canvas id="maze"></canvas></div>`;
+    } else if (r.type === 'zoom' || r.type === 'emoji') {
+      const who = (i) =>
+        s.results.rows
+          .filter((x) => x.detail && x.detail.choice === i)
+          .map((x) => esc(x.emoji))
+          .join(' ');
+      const pic =
+        r.type === 'zoom'
+          ? `<div class="zoom-view small sheet"><img src="/vendor/twemoji/${esc(r.img)}" alt=""></div>`
+          : `<div class="emo-row small">${r.imgs.map((f) => `<img class="on" src="/vendor/twemoji/${esc(f)}" alt="">`).join('')}</div>`;
+      left = `<h2><span class="mark">${esc(r.type === 'zoom' ? r.name : r.answer)}</span></h2>${pic}<div class="opts one">${optsHtml(r.options, r.correct, who)}</div>`;
     } else if (r.type === 'kanot') {
       const order = [...r.boats.map((b, i) => ({ ...b, team: i }))].sort((a, b) => (a.finished !== b.finished ? (a.finished ? -1 : 1) : a.finished ? a.ms - b.ms : b.x - a.x));
       const best = order[0];

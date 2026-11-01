@@ -79,6 +79,7 @@ function bot(name, code, behaviour, emoji) {
         if (t === 'ordning') s.emit('player:answer', { order: st.round.items.map((i) => i.id).reverse(), lock: true });
         if (t === 'narmast') s.emit('player:answer', { value: Math.floor(Math.random() * 1001), lock: true });
         if (t === 'final') s.emit('player:answer', { choice: Math.floor(Math.random() * 4) });
+        if (t === 'zoom' || t === 'emoji') s.emit('player:answer', { choice: Math.floor(Math.random() * 4) });
         if (t === 'pussel') {
           const board = st.round.mine.board;
           const path = behaviour === 'sleepy' ? randomMoves(board, 6) : solvePuzzle(board);
@@ -167,7 +168,7 @@ function swipeStep(s, st, behaviour) {
 
   assert.strictEqual(final.standings.length, N);
   assert(!seenPhases.has('warmup'), 'vanliga partier ska inte ha uppvärmningsfrågan');
-  for (const t of ['skiss', 'ordning', 'narmast', 'pussel', 'swipe', 'king', 'final']) assert(seenTypes.has(t), `segment ${t} spelades inte`);
+  for (const t of ['skiss', 'ordning', 'zoom', 'narmast', 'pussel', 'emoji', 'swipe', 'king', 'final']) assert(seenTypes.has(t), `segment ${t} spelades inte`);
   for (const ph of ['countdown', 'segment-intro', 'round-ready', 'bet', 'play', 'reveal', 'podium']) {
     assert(seenPhases.has(ph), `fas ${ph} saknas`);
   }
@@ -271,6 +272,34 @@ function swipeStep(s, st, behaviour) {
     kr.vote(z.id, { yes: [] });
     const d = Object.fromEntries(kr.round.results.map((r) => [r.id, r.delta]));
     assert.deepStrictEqual([d[k.id], d[x.id], d[y.id], d[z.id]], [200, -100, -100, 100]);
+    clearTimeout(kr.timer);
+  }
+
+  // Kingen: svar som inte passar uppmaningen röstas bort och ger −100.
+  {
+    const kr = new Room('KIN2', () => {});
+    const k = kr.addOrRejoin({ name: 'K', emoji: '👑' }).player;
+    const x = kr.addOrRejoin({ name: 'X', emoji: '🐸' }).player;
+    const y = kr.addOrRejoin({ name: 'Y', emoji: '🐼' }).player;
+    const z = kr.addOrRejoin({ name: 'Z', emoji: '🦊' }).player;
+    kr.plan = [{ type: 'king', kingId: k.id, prompt: 'En frukt' }];
+    kr.roundIndex = 0;
+    kr.round = { type: 'king', spec: kr.plan[0], bets: new Map(), answers: new Map(), next: new Set(), votes: new Map() };
+    kr.phase = 'play';
+    kr.round.answers.set(k.id, { text: 'Banan', locked: true });
+    kr.round.answers.set(x.id, { text: 'Äpple', locked: true });
+    kr.round.answers.set(y.id, { text: 'Bil', locked: true });
+    kr.round.answers.set(z.id, { text: 'Päron', locked: true });
+    kr.endPlay();
+    assert.strictEqual(kr.phase, 'vote');
+    kr.vote(k.id, { bad: [y.id] });
+    kr.vote(x.id, { bad: [y.id] });
+    kr.vote(y.id, { bad: [y.id] }); // egen röst räknas inte
+    kr.vote(z.id, { yes: [], bad: [] });
+    const d = Object.fromEntries(kr.round.results.map((r) => [r.id, r.delta]));
+    const v = Object.fromEntries(kr.round.results.map((r) => [r.id, r.detail.verdict]));
+    assert.strictEqual(v[y.id], 'invalid', 'Bil passar inte som frukt');
+    assert.deepStrictEqual([d[k.id], d[x.id], d[y.id], d[z.id]], [0, 100, -100, 100]);
     clearTimeout(kr.timer);
   }
 

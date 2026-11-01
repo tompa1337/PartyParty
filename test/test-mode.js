@@ -43,7 +43,7 @@ function hello(cookie, test) {
   const direct = await get('/test.html');
   assert.notStrictEqual(direct.status, 200, 'testsidan får inte gå att nå som vanlig fil');
 
-  const segments = ['warmup', 'skiss', 'ordning', 'narmast', 'pussel', 'swipe', 'king', 'final'];
+  const segments = ['warmup', 'skiss', 'ordning', 'zoom', 'narmast', 'pussel', 'emoji', 'swipe', 'king', 'final'];
 
   // 2. Utan inloggning blir det ett vanligt rum även om man ber om testläge
   const fake = await hello(null, { segments, bots: 3 });
@@ -83,7 +83,7 @@ function hello(cookie, test) {
         if (t === 'skiss') s.emit('player:answer', { lat: 48, lon: 2, lock: true });
         if (t === 'ordning') s.emit('player:answer', { order: st.round.items.map((i) => i.id), lock: true });
         if (t === 'narmast') s.emit('player:answer', { value: 500, lock: true });
-        if (t === 'final') s.emit('player:answer', { choice: 0 });
+        if (t === 'final' || t === 'zoom' || t === 'emoji') s.emit('player:answer', { choice: 0 });
         if (t === 'king') {
           assert(st.round.isKing, 'i testläget ska den riktiga spelaren vara kingen');
           s.emit('player:answer', { text: 'Näsa' });
@@ -94,8 +94,9 @@ function hello(cookie, test) {
     });
   });
 
-  assert.strictEqual(room.plan.length, 7, 'en omgång per del (7 delar utöver uppvärmningen)');
-  for (const t of ['warmup', 'skiss', 'ordning', 'narmast', 'pussel', 'swipe', 'king', 'final']) assert(types.has(t), `${t} spelades inte`);
+  // 3 spelare (udda) ger inga lagspel: 9 delar med en omgång var.
+  assert.strictEqual(room.plan.length, 9, 'en omgång per del');
+  for (const t of ['warmup', 'skiss', 'ordning', 'zoom', 'narmast', 'pussel', 'emoji', 'swipe', 'king', 'final']) assert(types.has(t), `${t} spelades inte`);
   assert.strictEqual(final.standings.length, 3);
 
   // 4. Bara några delar valda, utan uppvärmning

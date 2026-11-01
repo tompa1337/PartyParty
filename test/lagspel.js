@@ -126,5 +126,38 @@ function teamRoom(type) {
   clearTimeout(room.timer);
 }
 
-console.log('Kanotracet och Bombdesarmeringen ok ✔');
+// Zoomen och Emojigåtan: alla bilder finns, fyra olika alternativ och ett rätt.
+{
+  const TW = require('../server/twemoji');
+  const zoom = require('../content/zoom');
+  const riddles = require('../content/emojigator');
+  for (const a of zoom) assert(TW.exists(a.emoji), `bild saknas för ${a.name}`);
+  for (const g of riddles) for (const e of g.emojis) assert(TW.exists(e), `bild saknas i ${g.answer}: ${e}`);
+  assert.strictEqual(new Set(zoom.map((a) => a.name)).size, zoom.length, 'djurnamn ska vara unika');
+  for (let i = 0; i < 200; i++) {
+    for (const r of buildPlan(ids(3)).filter((x) => x.type === 'zoom' || x.type === 'emoji')) {
+      assert.strictEqual(r.options.length, 4);
+      assert.strictEqual(new Set(r.options).size, 4, 'alternativen ska vara olika');
+      const facit = r.type === 'zoom' ? r.animal.name : r.riddle.answer;
+      assert.strictEqual(r.options[r.correct], facit);
+    }
+  }
+  // Rätt svar slår fel, och tidigt rätt slår sent rätt.
+  const room = new Room('ZOO', () => {});
+  const ps = ['A', 'B', 'C'].map((n, i) => room.addOrRejoin({ name: n, emoji: ['🦊', '🐼', '🐸'][i] }).player);
+  room.plan = buildPlan(ps.map((p) => p.id), { segments: ['zoom'] });
+  room.roundIndex = -1;
+  room.nextRound();
+  room.startRound();
+  const sp = room.round.spec;
+  room.round.answers.set(ps[0].id, { choice: (sp.correct + 1) % 4, at: room.round.playStart + 100, locked: true });
+  room.round.answers.set(ps[1].id, { choice: sp.correct, at: room.round.playStart + 9000, locked: true });
+  room.round.answers.set(ps[2].id, { choice: sp.correct, at: room.round.playStart + 3000, locked: true });
+  room.endPlay();
+  const place = Object.fromEntries(room.round.results.map((x) => [x.id, x.place]));
+  assert.deepStrictEqual([place[ps[2].id], place[ps[1].id], place[ps[0].id]], [1, 2, 3]);
+  clearTimeout(room.timer);
+}
+
+console.log('Kanotracet, Bombdesarmeringen, Zoomen och Emojigåtan ok ✔');
 process.exit(0);
