@@ -1,4 +1,6 @@
 // Höger eller vänster: två kategorier, 10 ord från vardera sida används per omgång.
+// Tumregler: orden ska kunna förväxlas, inget ord får avslöja sig genom att innehålla
+// kategorins namn, och varje ord ska höra till exakt en av sidorna.
 module.exports = [
   {
     id: 'dino-pasta',
@@ -19,6 +21,76 @@ module.exports = [
     left: 'Växt',
     right: 'Fjäril',
     leftWords: ['Kattfot', 'Brudbröd', 'Daggkåpa', 'Fetknopp', 'Jungfrulin', 'Kungsljus', 'Svalört', 'Älgört', 'Nattviol', 'Gåsört', 'Humleblomster', 'Ängsskära', 'Prästkrage', 'Gullviva', 'Smörblomma', 'Blåsippa'],
-    rightWords: ['Påfågelöga', 'Amiral', 'Sorgmantel', 'Makaonfjäril', 'Citronfjäril', 'Nässelfjäril', 'Tistelfjäril', 'Kålfjäril', 'Aurorafjäril', 'Apollofjäril', 'Kartfjäril', 'Puktörneblåvinge', 'Mindre guldvinge', 'Ängssmygare', 'Silverstreckad pärlemorfjäril'],
+    rightWords: ['Påfågelöga', 'Amiral', 'Sorgmantel', 'Vinbärsfuks', 'Körsbärsfuks', 'Ljungblåvinge', 'Tosteblåvinge', 'Svartfläckig blåvinge', 'Mindre guldvinge', 'Violett guldvinge', 'Silversmygare', 'Skogsvitvinge'],
+  },
+  {
+    id: 'bakverk-dans',
+    left: 'Bakverk',
+    right: 'Dans',
+    leftWords: ['Mazarin', 'Biskvi', 'Drömmar', 'Hallongrottor', 'Finska pinnar', 'Brysselkex', 'Spritsar', 'Havreflarn', 'Mandelmusslor', 'Schackrutor', 'Dammsugare', 'Semla', 'Napoleonbakelse', 'Budapestbakelse', 'Kladdkaka', 'Sockerkaka', 'Lussekatt'],
+    rightWords: ['Mazurka', 'Polska', 'Hambo', 'Schottis', 'Vals', 'Tango', 'Foxtrot', 'Bugg', 'Salsa', 'Quickstep', 'Rumba', 'Samba', 'Polka', 'Menuett', 'Flamenco', 'Charleston', 'Lindy hop', 'Bolero'],
+  },
+  {
+    id: 'fisk-fagel',
+    left: 'Fisk',
+    right: 'Fågel',
+    leftWords: ['Gös', 'Sik', 'Harr', 'Lake', 'Sutare', 'Braxen', 'Id', 'Löja', 'Mört', 'Sarv', 'Ruda', 'Nors', 'Asp', 'Gärs', 'Vimma', 'Simpa', 'Stäm'],
+    rightWords: ['Kaja', 'Stare', 'Järpe', 'Orre', 'Knipa', 'Vigg', 'Lom', 'Skrake', 'Trana', 'Rördrom', 'Gärdsmyg', 'Domherre', 'Steglits', 'Grönsiska', 'Sothöna', 'Tofsvipa', 'Rödhake', 'Stenskvätta'],
+  },
+  {
+    id: 'huvudstad',
+    left: 'Huvudstad',
+    right: 'Inte huvudstad',
+    leftWords: ['Canberra', 'Ankara', 'Brasília', 'Ottawa', 'Washington', 'Wellington', 'New Delhi', 'Abuja', 'Astana', 'Rabat', 'Hanoi', 'Quito', 'Montevideo', 'Reykjavik', 'Ljubljana', 'Vaduz', 'Valletta', 'Tallinn', 'Bratislava', 'Vilnius'],
+    rightWords: ['Sydney', 'Istanbul', 'Rio de Janeiro', 'Toronto', 'New York', 'Auckland', 'Mumbai', 'Lagos', 'Almaty', 'Casablanca', 'Ho Chi Minh-staden', 'Zürich', 'Genève', 'Milano', 'Barcelona', 'Kraków', 'Göteborg', 'Chicago', 'Melbourne', 'São Paulo'],
+  },
+  {
+    id: 'gudar',
+    left: 'Nordisk gud',
+    right: 'Grekisk gud',
+    leftWords: ['Oden', 'Tor', 'Frej', 'Freja', 'Loke', 'Balder', 'Heimdall', 'Tyr', 'Brage', 'Idun', 'Njord', 'Ull', 'Vidar', 'Höder', 'Forsete', 'Frigg', 'Skade'],
+    rightWords: ['Zeus', 'Hera', 'Apollon', 'Artemis', 'Athena', 'Ares', 'Afrodite', 'Hermes', 'Hefaistos', 'Poseidon', 'Demeter', 'Dionysos', 'Hades', 'Hestia', 'Persefone', 'Eros', 'Nike', 'Pan'],
+  },
+  {
+    id: 'australien-sydamerika',
+    left: 'Djur i Australien',
+    right: 'Djur i Sydamerika',
+    leftWords: ['Koala', 'Vombat', 'Näbbdjur', 'Dingo', 'Kasuar', 'Emu', 'Kookaburra', 'Tasmansk djävul', 'Quokka', 'Wallaby', 'Myrpiggsvin', 'Lyrfågel', 'Taipan', 'Känguru'],
+    rightWords: ['Lama', 'Alpacka', 'Vikunja', 'Guanako', 'Kapybara', 'Jaguar', 'Sengångare', 'Jättemyrslok', 'Bältdjur', 'Nandu', 'Kondor', 'Ozelot', 'Tukan', 'Piraya', 'Anakonda', 'Chinchilla', 'Kapucinapa'],
+  },
+  {
+    id: 'os',
+    left: 'Vinter-OS',
+    right: 'Sommar-OS',
+    leftWords: ['Skeleton', 'Curling', 'Rodel', 'Skidskytte', 'Konståkning', 'Backhoppning', 'Nordisk kombination', 'Short track', 'Störtlopp', 'Super-G', 'Ishockey', 'Bob', 'Puckelpist', 'Skicross', 'Längdskidor'],
+    rightWords: ['Modern femkamp', 'Trampolin', 'Kanotslalom', 'BMX', 'Bordtennis', 'Badminton', 'Fäktning', 'Tiokamp', 'Sjukamp', 'Släggkastning', 'Rodd', 'Segling', 'Taekwondo', 'Brottning', 'Dressyr', 'Simhopp', 'Konstsim', 'Bågskytte', 'Triathlon'],
+  },
+  {
+    id: 'daggdjur-fisk',
+    left: 'Däggdjur',
+    right: 'Fisk',
+    leftWords: ['Delfin', 'Späckhuggare', 'Narval', 'Vitval', 'Sjöko', 'Dugong', 'Valross', 'Sjölejon', 'Säl', 'Tumlare', 'Havsutter', 'Sjöelefant', 'Kaskelot', 'Blåval', 'Knölval'],
+    rightWords: ['Sjöhäst', 'Havskatt', 'Rocka', 'Ål', 'Hammarhaj', 'Valhaj', 'Sjurygg', 'Marulk', 'Kummel', 'Stenbit', 'Makrill', 'Sill', 'Torsk', 'Rödspätta', 'Hälleflundra', 'Brugd'],
+  },
+  {
+    id: 'grundamne-mineral',
+    left: 'Grundämne',
+    right: 'Mineral',
+    leftWords: ['Molybden', 'Vanadin', 'Tellur', 'Rubidium', 'Hafnium', 'Gadolinium', 'Yttrium', 'Ytterbium', 'Erbium', 'Terbium', 'Volfram', 'Selen', 'Kadmium', 'Tallium', 'Iridium', 'Osmium', 'Germanium', 'Indium'],
+    rightWords: ['Kvarts', 'Fältspat', 'Glimmer', 'Olivin', 'Pyrit', 'Kalcit', 'Dolomit', 'Turmalin', 'Apatit', 'Beryll', 'Topas', 'Malakit', 'Azurit', 'Magnetit', 'Hematit', 'Fluorit', 'Gips', 'Granat'],
+  },
+  {
+    id: 'insekt',
+    left: 'Insekt',
+    right: 'Inte insekt',
+    leftWords: ['Myra', 'Nyckelpiga', 'Trollslända', 'Gräshoppa', 'Tvestjärt', 'Silverfisk', 'Geting', 'Humla', 'Mygga', 'Kackerlacka', 'Skräddare', 'Bladlus', 'Loppa', 'Syrsa', 'Bönsyrsa', 'Dagslända'],
+    rightWords: ['Spindel', 'Fästing', 'Skorpion', 'Kvalster', 'Gråsugga', 'Tusenfoting', 'Lockespindel', 'Daggmask', 'Snigel', 'Krabba', 'Hummer', 'Räka', 'Hästigel', 'Vattenloppa'],
+  },
+  {
+    id: 'sverige-afrika',
+    left: 'Djur i Sverige',
+    right: 'Djur i Afrika',
+    leftWords: ['Älg', 'Ren', 'Järv', 'Lodjur', 'Lämmel', 'Fjällräv', 'Bäver', 'Mård', 'Grävling', 'Rådjur', 'Hermelin', 'Skogshare', 'Tjäder'],
+    rightWords: ['Zebra', 'Giraff', 'Flodhäst', 'Noshörning', 'Gnu', 'Lejon', 'Gepard', 'Struts', 'Okapi', 'Surikat', 'Vårtsvin', 'Hyena', 'Gorilla', 'Schimpans', 'Dromedar'],
   },
 ];

@@ -45,7 +45,7 @@ const suspenders = (xs, ys, atX, deckY) => {
 const circle = (cx, cy, r) =>
   `M${cx - r} ${cy} a${r} ${r} 0 1 0 ${2 * r} 0 a${r} ${r} 0 1 0 ${-2 * r} 0`;
 
-module.exports = [
+const base = [
   {
     id: 'eiffel',
     name: 'Eiffeltornet',
@@ -247,3 +247,5 @@ module.exports = [
     ],
   },
 ];
+
+module.exports = [...base, ...require('./landmarks-more')];

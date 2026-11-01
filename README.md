@@ -78,10 +78,10 @@ Allt spelläge ligger i minnet på servern, så kör bara **en** instans. Pågå
 
 Allt innehåll ligger i `content/` och är lätt att bygga ut:
 
-- `landmarks.js`: skisserna som SVG-streck i en ruta på 400 × 300, i den ordning de ritas
+- `landmarks.js` och `landmarks-more.js`: skisserna som SVG-streck i en ruta på 400 × 300, i den ordning de ritas
 - `inventions.js`: uppfinningar med årtal och vad årtalet syftar på
 - `narmast.js`: frågor med svar mellan 0 och 1000
-- `swipe.js`: kategoripar med ord
+- `swipe.js`: kategoripar med ord. Orden ska kunna förväxlas, men inget ord får innehålla kategorins namn eller passa på båda sidorna
 - `final.js`: finalfrågor med kategori och fyra alternativ
 - `warmup.js`: uppvärmningsfrågor
 - `king.js`: uppmaningar till Kingen
