@@ -14,6 +14,7 @@
   let drawMs = null;
   let map = null;
   let lab = null; // Labyrinten: canvas och bollarnas positioner
+  let kanot = null; // Kanotracet: canvas, kanoter och plask
 
   // Testläge: inställningarna kommer från /test via adressen (?test=...).
   let testOpts = null;
@@ -134,6 +135,7 @@
   function cleanup() {
     sketch = null;
     lab = null;
+    kanot = null;
     drawStart = null;
     if (map) {
       map.remove();
@@ -214,6 +216,8 @@
     if (s.phase === 'play' && s.round && s.round.type === 'king') return buildPlay(s);
     if (s.phase === 'play' && s.round && s.round.type === 'pussel') return updatePussel(s);
     if (s.phase === 'play' && s.round && s.round.type === 'labyrint') return updateLabyrint(s);
+    if (s.phase === 'play' && s.round && s.round.type === 'kanot') return updateKanot(s);
+    if (s.phase === 'play' && s.round && s.round.type === 'bomb') return updateBomb(s);
     if (s.phase === 'vote') return buildVote(s);
     if (s.phase === 'reveal') {
       const w = stage.querySelector('.res .wait span');
@@ -273,12 +277,12 @@
         <p class="n soft">${seg.count > 1 ? `${seg.count} omgångar` : 'En omgång'}. ${
           seg.type === 'final'
             ? 'Satsa före varje fråga.'
-            : seg.type === 'labyrint'
+            : TEAM_GAMES.includes(seg.type)
               ? `Lagkamraterna delar på poängen. Vinnarlaget får ${(2 * s.players.length - 1) * 50} poäng var.`
               : `Etta får ${s.players.length * 100} poäng, sist får 100.`
         }</p>
         <ul>${seg.rules.map((r) => `<li>${esc(r)}</li>`).join('')}</ul>
-        ${seg.type === 'labyrint' && s.round && s.round.teams ? `<div class="lab-teams">${s.round.teams.map((t) => teamChip(t)).join('')}</div>` : ''}
+        ${TEAM_GAMES.includes(seg.type) && s.round && s.round.teams ? `<div class="lab-teams">${s.round.teams.map((t) => teamChip(t, '', ROLE_LABELS[seg.type])).join('')}</div>` : ''}
       </div>`;
   }
 
@@ -333,6 +337,18 @@
         <div class="lab-teams" id="labteams"></div>`;
       startLab($('#maze'), r);
       updateLabyrint(s);
+    } else if (r.type === 'kanot') {
+      stage.innerHTML = `
+        <div class="lab-wrap"><canvas id="river"></canvas></div>
+        <div class="lab-teams" id="labteams"></div>`;
+      startKanot($('#river'), r);
+      updateKanot(s);
+    } else if (r.type === 'bomb') {
+      stage.innerHTML = `
+        <div class="bomb-top"><span class="bomb-ico">💣</span><div><p class="prompt" style="font-size:3rem">Desarmera så många bomber ni hinner</p>
+        <p class="sub">Den som klipper ser bomben. Den andra läser manualen. Ni byter efter varje bomb.</p></div></div>
+        <div class="bomb-teams" id="bombteams"></div>`;
+      updateBomb(s);
     } else if (r.type === 'king') {
       const done = s.players.filter((p) => p.connected && p.status === 'done').length;
       const n = s.players.filter((p) => p.connected).length;
@@ -376,12 +392,194 @@
   // ---------- Labyrinten ----------
   const secs = (ms) => (ms / 1000).toLocaleString('sv-SE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
-  function teamChip(t, ball) {
-    let status = '';
-    if (ball) status = ball.finished ? `<span class="st ok">🏁 ${secs(ball.ms)} s</span>` : `<span class="st">${ball.left} steg kvar</span>`;
-    const who = (m, arrow) => `<span class="${m.connected ? '' : 'gone'}">${esc(m.emoji)} ${esc(m.name)} <span class="ax">${arrow}</span></span>`;
-    return `<div class="lab-team sheet ${ball && ball.finished ? 'done' : ''}" style="--team:${esc(t.color)}">
-      <span class="dot"></span><b>Lag ${esc(t.name)}</b>${who(t.x, '↔')}${who(t.y, '↕')}${status}</div>`;
+  const TEAM_GAMES = ['labyrint', 'kanot', 'bomb'];
+  const ROLE_LABELS = { labyrint: ['↔', '↕'], kanot: ['vänster', 'höger'], bomb: ['', ''] };
+
+  function teamChip(t, status = '', roles = ROLE_LABELS.labyrint, done = false) {
+    const who = (m, label) => `<span class="${m.connected ? '' : 'gone'}">${esc(m.emoji)} ${esc(m.name)}${label ? ` <span class="ax">${label}</span>` : ''}</span>`;
+    return `<div class="lab-team sheet ${done ? 'done' : ''}" style="--team:${esc(t.color)}">
+      <span class="dot"></span><b>Lag ${esc(t.name)}</b>${who(t.x, roles[0])}${who(t.y, roles[1])}${status}</div>`;
+  }
+
+  function setHtml(el, html) {
+    if (el && el.dataset.html !== html) {
+      el.innerHTML = html;
+      el.dataset.html = html;
+    }
+  }
+
+  // ---------- Kanotracet ----------
+  function updateKanot(s) {
+    const r = s.round;
+    if (!kanot || !r.boats) return;
+    kanot.round = r;
+    setHtml(
+      $('#labteams'),
+      r.teams
+        .map((t) => {
+          const b = r.boats[t.id];
+          const st = b.finished ? `<span class="st ok">🏁 ${secs(b.ms)} s</span>` : `<span class="st">${Math.round(b.x)} av ${r.length} m</span>`;
+          return teamChip(t, st, ROLE_LABELS.kanot, b.finished);
+        })
+        .join('')
+    );
+  }
+
+  function startKanot(canvas, round) {
+    kanot = { canvas, round, disp: round.boats.map((b) => ({ ...b })), seen: round.boats.map((b) => ({ nL: b.nL, nR: b.nR })), splashes: [] };
+    const me = kanot;
+    let last = performance.now();
+    const loop = (now) => {
+      if (kanot !== me || !canvas.isConnected) return;
+      const k = Math.min(1, ((now - last) / 1000) * 14);
+      last = now;
+      me.round.boats.forEach((b, i) => {
+        const d = me.disp[i] || (me.disp[i] = { ...b });
+        d.x += (b.x - d.x) * k;
+        d.y += (b.y - d.y) * k;
+        d.th += (b.th - d.th) * k;
+        const seen = me.seen[i] || (me.seen[i] = { nL: b.nL, nR: b.nR });
+        if (b.nL > seen.nL) me.splashes.push({ team: i, side: 'L', at: now });
+        if (b.nR > seen.nR) me.splashes.push({ team: i, side: 'R', at: now });
+        seen.nL = b.nL;
+        seen.nR = b.nR;
+      });
+      me.splashes = me.splashes.filter((sp) => now - sp.at < 450);
+      drawRiver(canvas, me, now);
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  }
+
+  function drawRiver(canvas, st, now) {
+    const r = st.round;
+    const dpr = window.devicePixelRatio || 1;
+    const W = canvas.clientWidth;
+    const H = canvas.clientHeight;
+    if (!W || !H) return;
+    if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)) {
+      canvas.width = Math.round(W * dpr);
+      canvas.height = Math.round(H * dpr);
+    }
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    const n = r.teams.length;
+    const gap = Math.min(16, H * 0.03);
+    const laneH = Math.min((H - gap * (n - 1)) / n, H * 0.4);
+    const top0 = (H - (laneH * n + gap * (n - 1))) / 2;
+    const left = W * 0.02;
+    const right = W * 0.96;
+    const sx = (right - left) / r.length;
+    const sy = (laneH * 0.36) / r.half;
+
+    r.teams.forEach((t, i) => {
+      const top = top0 + i * (laneH + gap);
+      const mid = top + laneH / 2;
+      // Vatten och strandkanter
+      const g = ctx.createLinearGradient(0, top, 0, top + laneH);
+      g.addColorStop(0, '#1d3a6b');
+      g.addColorStop(0.5, '#25508f');
+      g.addColorStop(1, '#1d3a6b');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.roundRect(left, top, right - left + W * 0.02, laneH, 14);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(79, 227, 176, 0.35)';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      // Vågor som rör sig
+      ctx.strokeStyle = 'rgba(255,255,255,0.10)';
+      ctx.lineWidth = 2;
+      for (let k = 0; k < 14; k++) {
+        const wx = left + (((k * 97 + now * 0.03) % (right - left)) + (right - left)) % (right - left);
+        const wy = top + laneH * (0.2 + ((k * 37) % 60) / 100);
+        ctx.beginPath();
+        ctx.moveTo(wx, wy);
+        ctx.quadraticCurveTo(wx + 10, wy - 4, wx + 20, wy);
+        ctx.stroke();
+      }
+      // Mållinje
+      const cs = Math.max(6, laneH / 10);
+      for (let row = 0; row * cs < laneH; row++) {
+        for (let col = 0; col < 2; col++) {
+          ctx.fillStyle = (row + col) % 2 ? '#f5f1ff' : '#15122e';
+          ctx.fillRect(right + col * cs, top + row * cs, cs, Math.min(cs, top + laneH - (top + row * cs)));
+        }
+      }
+      // Lagets namn
+      ctx.fillStyle = t.color;
+      ctx.font = `700 ${Math.max(14, laneH * 0.16)}px Figtree, system-ui, sans-serif`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText(`Lag ${t.name}  ${t.x.emoji}${t.y.emoji}`, left + 12, top + 8);
+
+      // Kanoten
+      const b = st.disp[t.id];
+      if (!b) return;
+      const cx = left + b.x * sx;
+      const cy = mid + b.y * sy;
+      const ang = Math.atan2(Math.sin(b.th) * sy, Math.cos(b.th) * sx);
+      const len = Math.max(40, Math.min(laneH * 0.9, W * 0.07));
+      const wid = len * 0.28;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(ang);
+      for (const sp of st.splashes.filter((x) => x.team === t.id)) {
+        const age = (now - sp.at) / 450;
+        const side = sp.side === 'L' ? -1 : 1;
+        ctx.fillStyle = `rgba(200, 235, 255, ${0.8 * (1 - age)})`;
+        ctx.beginPath();
+        ctx.arc(-len * 0.1 - age * len * 0.3, side * (wid * 0.9 + age * wid * 0.6), wid * (0.25 + age * 0.4), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.shadowColor = t.color;
+      ctx.shadowBlur = 16;
+      ctx.fillStyle = t.color;
+      ctx.beginPath();
+      ctx.moveTo(len / 2, 0);
+      ctx.quadraticCurveTo(0, -wid, -len / 2, 0);
+      ctx.quadraticCurveTo(0, wid, len / 2, 0);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = 'rgba(21, 18, 46, 0.55)';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, len * 0.3, wid * 0.42, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = `${wid * 0.9}px system-ui, sans-serif`;
+      ctx.fillText(t.x.emoji, cx - Math.cos(ang) * len * 0.15, cy - Math.sin(ang) * len * 0.15);
+      ctx.fillText(t.y.emoji, cx + Math.cos(ang) * len * 0.15, cy + Math.sin(ang) * len * 0.15);
+    });
+  }
+
+  // ---------- Bombdesarmeringen ----------
+  function updateBomb(s) {
+    const r = s.round;
+    if (!r.progress) return;
+    const byId = Object.fromEntries(r.teams.flatMap((t) => [t.x, t.y]).map((m) => [m.id, m]));
+    setHtml(
+      $('#bombteams'),
+      r.teams
+        .map((t) => {
+          const pr = r.progress[t.id];
+          const cutter = byId[pr.solo || pr.defuser];
+          const reader = cutter && cutter.id === t.x.id ? t.y : t.x;
+          const roles = pr.solo
+            ? `${esc(cutter.emoji)} ${esc(cutter.name)} gör allt själv`
+            : `${esc(cutter.emoji)} ${esc(cutter.name)} klipper · ${esc(reader.emoji)} ${esc(reader.name)} läser`;
+          const fl = pr.flash ? (pr.flash.kind === 'ok' ? '<div class="bomb-flash ok">✅ Desarmerad!</div>' : '<div class="bomb-flash boom">💥 PANG!</div>') : '';
+          return `<div class="bomb-card sheet ${pr.flash ? pr.flash.kind : ''}" style="--team:${esc(t.color)}">
+            <div class="bh"><span class="dot"></span><b>Lag ${esc(t.name)}</b><span class="bn">Bomb ${pr.n}</span></div>
+            <div class="bs"><span class="ok">✅ ${pr.defused}</span><span class="bad">💥 ${pr.booms}</span></div>
+            <p class="who">${roles}</p>
+            ${fl}
+          </div>`;
+        })
+        .join('')
+    );
   }
 
   function updateLabyrint(s) {
@@ -390,7 +588,13 @@
     lab.round = r;
     const el = $('#labteams');
     if (el) {
-      const html = r.teams.map((t) => teamChip(t, r.balls[t.id])).join('');
+      const html = r.teams
+        .map((t) => {
+          const b = r.balls[t.id];
+          const st = b.finished ? `<span class="st ok">🏁 ${secs(b.ms)} s</span>` : `<span class="st">${b.left} steg kvar</span>`;
+          return teamChip(t, st, ROLE_LABELS.labyrint, b.finished);
+        })
+        .join('');
       if (el.dataset.html !== html) {
         el.innerHTML = html;
         el.dataset.html = html;
@@ -549,6 +753,19 @@
         return d.solved
           ? `Löst på ${(d.ms / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })} s <span class="soft">· ${d.moves} drag</span>`
           : `${d.correct} av 8 rätt <span class="soft">· ej löst</span>`;
+      case 'kanot':
+      case 'bomb': {
+        const t = round.teams[d.team];
+        const mate = t ? [t.x, t.y].find((m) => m.id === d.mate) : null;
+        const dot = t ? `<span class="tdot" style="background:${esc(t.color)}"></span>` : '';
+        const res =
+          round.type === 'bomb'
+            ? `✅ ${d.defused} desarmerade <span class="soft">· 💥 ${d.booms}</span>`
+            : d.finished
+              ? `I mål på ${secs(d.ms)} s`
+              : `${d.dist} av ${round.length} m`;
+        return `${dot}${res}${mate ? ` <span class="soft">· med ${esc(mate.emoji)} ${esc(mate.name)}</span>` : ''}`;
+      }
       case 'labyrint': {
         const t = round.teams[d.team];
         const mate = t ? [t.x, t.y].find((m) => m.id === d.mate) : null;
@@ -635,6 +852,21 @@
       const sub = !w ? '' : best.finished ? `I mål på ${secs(best.ms)} sekunder.` : `Lag ${esc(w.name)} kom närmast, ${best.left} steg kvar.`;
       left = `<h2><span class="mark">${title}</span></h2><p class="fact">${sub}</p>
         <div class="lab-wrap mini"><canvas id="maze"></canvas></div>`;
+    } else if (r.type === 'kanot') {
+      const order = [...r.boats.map((b, i) => ({ ...b, team: i }))].sort((a, b) => (a.finished !== b.finished ? (a.finished ? -1 : 1) : a.finished ? a.ms - b.ms : b.x - a.x));
+      const best = order[0];
+      const w = best && r.teams[best.team];
+      const title = !w ? 'Kanotracet' : best.finished ? `Lag ${esc(w.name)} vann!` : 'Ingen kom i mål';
+      const sub = !w ? '' : best.finished ? `I mål på ${secs(best.ms)} sekunder.` : `Lag ${esc(w.name)} kom längst, ${Math.round(best.x)} av ${r.length} meter.`;
+      left = `<h2><span class="mark">${title}</span></h2><p class="fact">${sub}</p>
+        <div class="lab-wrap mini"><canvas id="river"></canvas></div>`;
+    } else if (r.type === 'bomb') {
+      const order = r.teams.map((t) => ({ t, pr: r.progress[t.id] })).sort((a, b) => b.pr.defused - a.pr.defused || a.pr.booms - b.pr.booms);
+      const best = order[0];
+      left = `<h2><span class="mark">${best && best.pr.defused ? `Lag ${esc(best.t.name)} vann!` : 'Pang överallt!'}</span></h2>
+        <div class="bomb-teams col">${order
+          .map(({ t, pr }) => `<div class="bomb-card sheet" style="--team:${esc(t.color)}"><div class="bh"><span class="dot"></span><b>Lag ${esc(t.name)}</b></div><div class="bs"><span class="ok">✅ ${pr.defused}</span><span class="bad">💥 ${pr.booms}</span></div></div>`)
+          .join('')}</div>`;
     } else if (r.type === 'king') {
       left = `<p class="sub">${esc(r.prompt)}</p>
         <p class="king-who"><span class="crown">👑</span> ${esc(r.kingEmoji)} ${esc(r.kingName)} skrev</p>
@@ -657,6 +889,7 @@
     $('#next').addEventListener('click', () => socket.emit('host:next'));
     if (r.type === 'skiss') drawRevealMap(s);
     if (r.type === 'labyrint' && r.maze) startLab($('#maze'), r);
+    if (r.type === 'kanot' && r.boats) startKanot($('#river'), r);
   }
 
   function drawRevealMap(s) {

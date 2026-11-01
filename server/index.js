@@ -196,6 +196,8 @@ io.on('connection', (socket) => {
   socket.on('player:vote', forPlayer((d) => room.vote(playerId, d)));
   socket.on('player:puzzle', forPlayer((d) => room.puzzleMove(playerId, d)));
   socket.on('player:steer', forPlayer((d) => room.steer(playerId, d)));
+  socket.on('player:paddle', forPlayer((d) => room.paddle(playerId, d)));
+  socket.on('player:cut', forPlayer((d) => room.cut(playerId, d)));
 
   socket.on('disconnect', () => {
     if (!room) return;

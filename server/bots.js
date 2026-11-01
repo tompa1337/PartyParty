@@ -2,6 +2,7 @@
 // med lite slump och fördröjning, så att man kan prova spelet ensam.
 
 const M = require('./maze');
+const B = require('./bomb');
 
 const NAMES = ['Robot Rut', 'Bot Bengt', 'Kalkyl-Kim', 'Chip Charlie', 'Data Doris'];
 const EMOJIS = ['🤖', '👾', '🛸', '🦾', '🎲'];
@@ -152,6 +153,42 @@ function play(room, p, key, r) {
         setTimeout(steerLoop, rand(120, 280));
       };
       return later(room, p, key, rand(600, 1500), steerLoop);
+    }
+    case 'kanot': {
+      // Botar paddlar i ojämn takt och väntar en stund om deras tag skulle svänga kanoten för mycket.
+      const strokeLoop = () => {
+        if (`${room.phase}:${room.roundIndex}` !== key || !r.boats) return;
+        const t = room.teamOf(p.id);
+        if (!t) return;
+        const boat = r.boats[t.id];
+        if (boat.finishedAt) return;
+        for (const side of room.sidesFor(p.id)) {
+          const bad = side === 'L' ? boat.th > 0.12 || (boat.y > 1.5 && boat.th >= 0) : boat.th < -0.12 || (boat.y < -1.5 && boat.th <= 0);
+          if (!bad || chance(0.1)) room.paddle(p.id, { side });
+        }
+        setTimeout(strokeLoop, rand(300, 520));
+      };
+      return later(room, p, key, rand(300, 900), strokeLoop);
+    }
+    case 'bomb': {
+      // Bara lag med två botar spelar själva. Med en människa i laget gör människan allt.
+      const cutLoop = () => {
+        if (`${room.phase}:${room.roundIndex}` !== key || !r.bombState) return;
+        const t = room.teamOf(p.id);
+        if (!t) return;
+        const mate = room.players.get(t.x === p.id ? t.y : t.x);
+        if (mate && !mate.bot) return;
+        const role = room.bombRole(p.id);
+        if (role === 'defuser' || role === 'solo') {
+          const st = r.bombState[t.id];
+          const b = room.bombAt(st, st.idx);
+          const right = B.solution(b);
+          const wire = chance(0.8) ? right : Math.floor(Math.random() * b.wires.length);
+          room.cut(p.id, { bomb: st.idx, wire });
+        }
+        setTimeout(cutLoop, rand(5000, 11000));
+      };
+      return later(room, p, key, rand(4000, 9000), cutLoop);
     }
     case 'king': {
       const text = pickOne(KING_WORDS);

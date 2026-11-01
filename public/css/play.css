@@ -200,3 +200,29 @@ input[type='range'] { width: 100%; accent-color: var(--glow); height: 40px; }
   .pad { min-height: 200px; gap: 10px; }
   .lab-btn .sym { font-size: 48px; }
 }
+
+/* Kanotracet */
+.khint { font-size: 18px; text-align: center; margin: 0; min-height: 2.6em; color: var(--soft); }
+.khint b { color: var(--glow); }
+.paddle .sym { font-size: 72px; }
+.paddle.stroke { animation: stroke .22s ease-out; }
+@keyframes stroke { 0% { background: var(--panel-2); box-shadow: inset 0 0 0 4px var(--glow), 0 0 30px rgba(255, 181, 71, 0.45); transform: scale(.96); } 100% { transform: none; } }
+
+/* Bombdesarmeringen */
+.bomb-n { font-family: var(--display); font-weight: 800; font-size: 22px; margin: 0; text-align: center; color: var(--soft); }
+.bomb-box { background: #2a2433; border-radius: 22px; padding: 14px; display: grid; gap: 12px; box-shadow: inset 0 0 0 2px rgba(255,255,255,.08), 0 10px 30px rgba(0,0,0,.4); }
+.serial { font-size: 15px; color: var(--soft); text-align: center; }
+.serial b { font-family: ui-monospace, Menlo, monospace; font-size: 24px; letter-spacing: .15em; color: #ffd24d; background: #111; padding: 4px 10px; border-radius: 8px; margin-left: 6px; }
+.wires { display: grid; gap: 10px; }
+.wire { display: grid; grid-template-columns: 28px 1fr 64px; align-items: center; gap: 10px; padding: 10px 12px; background: #1b1722; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); border-radius: 14px; color: var(--soft); }
+.wire .no { font-family: var(--display); font-weight: 800; font-size: 18px; }
+.wire .cable { height: 16px; border-radius: 8px; background: var(--wc); box-shadow: 0 0 0 2px rgba(255,255,255,.18), 0 2px 8px rgba(0,0,0,.5); }
+.wire .cn { font-size: 14px; text-align: right; }
+.wire.cut .cable { background: linear-gradient(90deg, var(--wc) 44%, transparent 44% 56%, var(--wc) 56%); }
+.manual { display: grid; gap: 10px; overflow-y: auto; }
+.manual details { background: #f4efe2; color: #26221d; border-radius: 14px; padding: 10px 14px; }
+.manual summary { font-family: var(--display); font-weight: 800; font-size: 20px; cursor: pointer; }
+.manual ol { margin: 6px 0 2px; padding-left: 22px; display: grid; gap: 6px; font-size: 16px; line-height: 1.35; }
+.bomb-res .big-ico { font-size: 96px; }
+.bomb-res.boom .title { color: var(--bad); }
+.bomb-res.ok .title { color: var(--good); }

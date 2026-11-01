@@ -226,3 +226,23 @@ body.tv.wide #rail-wrap { display: none; }
 .lab-team .st.ok { color: var(--good); }
 .lab-team.done { background: rgba(79, 227, 176, 0.1); }
 .tdot { display: inline-block; width: .8rem; height: .8rem; border-radius: 50%; margin-right: .5rem; vertical-align: .05em; }
+
+/* Bombdesarmeringen */
+.bomb-top { display: flex; align-items: center; gap: 2rem; }
+.bomb-ico { font-size: 7rem; filter: drop-shadow(0 0 30px rgba(255, 107, 122, 0.5)); animation: tick 1s steps(2) infinite; }
+@keyframes tick { 50% { transform: scale(1.06) rotate(-3deg); } }
+.bomb-teams { display: grid; grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); gap: 1.2rem; }
+.bomb-teams.col { grid-template-columns: 1fr; }
+.bomb-card { --team: var(--glow); position: relative; padding: 1.2rem 1.4rem; box-shadow: inset 0 0 0 2px var(--team); overflow: hidden; }
+.bomb-card .bh { display: flex; align-items: center; gap: .8rem; font-size: 1.5rem; }
+.bomb-card .bh b { color: var(--team); }
+.bomb-card .dot { width: 1.1rem; height: 1.1rem; border-radius: 50%; background: var(--team); box-shadow: 0 0 12px var(--team); }
+.bomb-card .bn { margin-left: auto; color: var(--soft); font-size: 1.2rem; }
+.bomb-card .bs { display: flex; gap: 2rem; font-family: var(--display); font-weight: 800; font-size: 3.4rem; margin: .5rem 0; }
+.bomb-card .who { font-size: 1.2rem; color: var(--soft); margin: 0; }
+.bomb-card.boom { animation: shake .5s; background: rgba(255, 107, 122, 0.22); }
+.bomb-card.ok { background: rgba(79, 227, 176, 0.16); }
+.bomb-flash { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--display); font-weight: 800; font-size: 3rem; }
+.bomb-flash.boom { color: var(--bad); background: rgba(48, 14, 26, 0.96); }
+.bomb-flash.ok { color: var(--good); background: rgba(12, 44, 34, 0.96); }
+@keyframes shake { 0%, 100% { transform: none; } 20% { transform: translateX(-10px) rotate(-1deg); } 40% { transform: translateX(10px) rotate(1deg); } 60% { transform: translateX(-6px); } 80% { transform: translateX(6px); } }

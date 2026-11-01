@@ -141,6 +141,7 @@
         return buildWarmup(s);
       case 'segment-intro':
         if (s.segment.type === 'labyrint' && s.round && s.round.mate) return labyrintIntro(s);
+        if ((s.segment.type === 'kanot' || s.segment.type === 'bomb') && s.round && s.round.mate) return teamIntro(s);
         app.innerHTML = `<div class="center"><p class="lead soft">Nästa del</p><h1 class="title"><span class="mark">${esc(s.segment.title)}</span></h1>
           <p class="lead">${s.segment.rules.map(esc).join('. ')}.</p><p class="soft">${s.segment.type === 'final' ? 'Snart dags att satsa.' : 'Snart börjar det. Titta på TV:n.'}</p></div>`;
         return;
@@ -165,6 +166,8 @@
   function update(s) {
     if (s.phase === 'lobby') return buildLobby(s);
     if (s.phase === 'play' && s.round && s.round.type === 'labyrint') return updateLabyrint(s);
+    if (s.phase === 'play' && s.round && s.round.type === 'kanot') return updateKanot(s);
+    if (s.phase === 'play' && s.round && s.round.type === 'bomb') return updateBomb(s);
     if (s.phase === 'reveal' || s.phase === 'warmup-reveal') {
       const b = $('#next');
       if (b && s.me.pressedNext) {
@@ -295,6 +298,172 @@
     if (r.type === 'king') return playKing(s);
     if (r.type === 'pussel') return playPussel(s);
     if (r.type === 'labyrint') return playLabyrint(s);
+    if (r.type === 'kanot') return playKanot(s);
+    if (r.type === 'bomb') return playBomb(s);
+  }
+
+  function teamIntro(s) {
+    const r = s.round;
+    const text =
+      r.type === 'kanot'
+        ? `Du paddlar på <b>${r.mySide === 'L' ? 'vänster' : 'höger'}</b> sida och ${esc(r.mate.name)} på ${r.mySide === 'L' ? 'höger' : 'vänster'}. Paddla i takt, annars svänger kanoten!`
+        : `Den ena ser bomben och klipper, den andra läser manualen och säger vilken tråd. Ni byter efter varje bomb.`;
+    app.innerHTML = `<div class="center">
+      <p class="lead soft">Nästa del</p>
+      <h1 class="title"><span class="mark">${esc(s.segment.title)}</span></h1>
+      ${teamHead(r)}
+      <p class="lead">${text}</p>
+      <p class="soft">Snart börjar det. Titta på TV:n.</p></div>`;
+  }
+
+  // ---------- Kanotracet ----------
+  function kanotKey(r) {
+    const b = r.boats && r.boats[r.myTeam];
+    return `${(r.mySides || []).join('')}|${b && b.finished ? 1 : 0}`;
+  }
+
+  // Tips utifrån hur kanoten svänger: positiv kurs betyder att den svänger åt höger (nedåt på TV:n).
+  function kanotHint(r) {
+    const b = r.boats[r.myTeam];
+    const sides = r.mySides || [r.mySide];
+    if (Math.abs(b.th) < 0.12) return 'Rakt fram! Håll takten.';
+    const turningRight = b.th > 0;
+    if (sides.length > 1) return turningRight ? 'Kanoten svänger åt höger, paddla mer på höger sida.' : 'Kanoten svänger åt vänster, paddla mer på vänster sida.';
+    const mine = sides[0];
+    const needMe = (mine === 'R') === turningRight;
+    return needMe ? 'Kanoten svänger bort från din sida. <b>Paddla mer!</b>' : 'Kanoten svänger mot din sida. <b>Vänta lite.</b>';
+  }
+
+  function updateKanot(s) {
+    const r = s.round;
+    if (r.myTeam == null || !r.boats) return;
+    if (kanotKey(r) !== ui.kanotKey) {
+      teardown();
+      return playKanot(s);
+    }
+    const b = r.boats[r.myTeam];
+    const d = $('#kdist');
+    if (d) d.textContent = `${Math.round(b.x)} av ${r.length} m`;
+    const h = $('#khint');
+    if (h) {
+      const html = kanotHint(r);
+      if (h.dataset.html !== html) {
+        h.innerHTML = html;
+        h.dataset.html = html;
+      }
+    }
+  }
+
+  function playKanot(s) {
+    const r = s.round;
+    if (r.myTeam == null || !r.boats) return waitingScreen('Kanotracet', 'Titta på TV:n.');
+    const b = r.boats[r.myTeam];
+    ui.kanotKey = kanotKey(r);
+    if (b.finished) {
+      if (navigator.vibrate) navigator.vibrate([60, 40, 120]);
+      return waitingScreen('<span class="mark">I mål! 🏁</span>', `Ni paddlade i mål på ${(b.ms / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })} sekunder. Väntar på de andra lagen.`);
+    }
+    const sides = r.mySides || [r.mySide];
+    const both = sides.length > 1;
+    app.innerHTML = `
+      ${teamHead(r)}
+      <p class="lead" style="margin:0">${both ? 'Din lagkamrat har lämnat, så du paddlar på <b>båda</b> sidorna.' : `Du paddlar på <b>${sides[0] === 'L' ? 'vänster' : 'höger'}</b> sida. Tryck för varje tag.`}</p>
+      <p class="khint" id="khint">${kanotHint(r)}</p>
+      <div class="pad ${both ? 'pad-x' : ''}">${sides
+        .map((sd) => `<button class="lab-btn paddle" data-side="${sd}"><span class="sym">${sd === 'L' ? '⟵' : '⟶'}</span><span class="lbl">Paddla ${sd === 'L' ? 'vänster' : 'höger'}</span></button>`)
+        .join('')}</div>
+      <p class="count" id="kdist">${Math.round(b.x)} av ${r.length} m</p>`;
+    app.querySelectorAll('.paddle').forEach((btn) => {
+      btn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        socket.emit('player:paddle', { side: btn.dataset.side });
+        if (navigator.vibrate) navigator.vibrate(20);
+        btn.classList.remove('stroke');
+        void btn.offsetWidth;
+        btn.classList.add('stroke');
+      });
+      btn.addEventListener('contextmenu', (e) => e.preventDefault());
+    });
+  }
+
+  // ---------- Bombdesarmeringen ----------
+  const WIRE_COLORS = { röd: '#ff4d5e', blå: '#4d8bff', gul: '#ffd24d', vit: '#f4f1ff', svart: '#0d0b18' };
+  const ORD = ['första', 'andra', 'tredje', 'fjärde', 'femte', 'sjätte'];
+
+  function bombKey(r) {
+    return `${r.role}|${r.idx}|${r.flash ? r.flash.kind : ''}`;
+  }
+
+  function updateBomb(s) {
+    const r = s.round;
+    if (r.myTeam == null) return;
+    if (bombKey(r) !== ui.bombKey) {
+      const keepManual = ui.manualOpen;
+      teardown();
+      ui.manualOpen = keepManual;
+      return playBomb(s);
+    }
+  }
+
+  function manualHtml(manual) {
+    return `<div class="manual">${manual
+      .map((sec) => `<details ${sec.wires === 3 ? '' : ''} open><summary>${sec.wires} trådar</summary><ol>${sec.rules.map((t) => `<li>${esc(t)}</li>`).join('')}</ol></details>`)
+      .join('')}</div>`;
+  }
+
+  function playBomb(s) {
+    const r = s.round;
+    if (r.myTeam == null || !r.role) return waitingScreen('Bombdesarmeringen', 'Titta på TV:n.');
+    ui.bombKey = bombKey(r);
+    if (r.flash) {
+      const ok = r.flash.kind === 'ok';
+      if (navigator.vibrate) navigator.vibrate(ok ? [60, 40, 120] : [300, 80, 300]);
+      app.innerHTML = `<div class="center bomb-res ${ok ? 'ok' : 'boom'}">
+        <div class="big-ico">${ok ? '✅' : '💥'}</div>
+        <h1 class="title">${ok ? 'Desarmerad!' : 'PANG!'}</h1>
+        <p class="lead">${ok ? 'Snyggt jobbat.' : `Rätt var den ${ORD[r.flash.right]} tråden.`}</p>
+        <p class="soft">${r.role === 'solo' ? 'Nästa bomb kommer…' : 'Nu byter ni. Nästa bomb kommer…'}</p></div>`;
+      return;
+    }
+    const head = `${teamHead(r)}<p class="bomb-n">Bomb ${r.n}</p>`;
+    if (r.role === 'expert') {
+      app.innerHTML = `${head}
+        <p class="lead" style="margin:0"><b>Du har manualen.</b> ${esc(r.mate.emoji)} ${esc(r.mate.name)} ser bomben. Fråga hur många trådar och vilka färger, och säg vilken som ska klippas.</p>
+        ${manualHtml(r.manual)}`;
+      return;
+    }
+    const b = r.bomb;
+    app.innerHTML = `${head}
+      <p class="lead" style="margin:0">${
+        r.role === 'solo' ? 'Du gör båda delarna själv. Läs manualen och klipp rätt tråd.' : `<b>Du ser bomben.</b> Beskriv den för ${esc(r.mate.emoji)} ${esc(r.mate.name)} som har manualen.`
+      }</p>
+      <div class="bomb-box">
+        <div class="serial">Serienummer <b>${esc(b.serial)}</b></div>
+        <div class="wires">${b.wires
+          .map(
+            (c, i) => `<button class="wire" data-i="${i}" style="--wc:${WIRE_COLORS[c]}" aria-label="Klipp den ${ORD[i]} tråden (${c})">
+              <span class="no">${i + 1}</span><span class="cable"></span><span class="cn">${c}</span></button>`
+          )
+          .join('')}</div>
+        <p class="soft" style="margin:0;text-align:center">Tryck på en tråd för att klippa. Det går inte att ångra!</p>
+      </div>
+      ${r.role === 'solo' ? `<button class="quiet" id="man">${ui.manualOpen ? 'Dölj manualen' : 'Visa manualen'}</button>${ui.manualOpen ? manualHtml(r.manual) : ''}` : ''}`;
+    app.querySelectorAll('.wire').forEach((w) =>
+      w.addEventListener('click', () => {
+        app.querySelectorAll('.wire').forEach((x) => (x.disabled = true));
+        w.classList.add('cut');
+        socket.emit('player:cut', { bomb: r.idx, wire: Number(w.dataset.i) });
+      })
+    );
+    const m = $('#man');
+    if (m)
+      m.addEventListener('click', () => {
+        ui.manualOpen = !ui.manualOpen;
+        const keep = ui.manualOpen;
+        teardown();
+        ui.manualOpen = keep;
+        playBomb(s);
+      });
   }
 
   // ---------- Labyrinten ----------
@@ -752,6 +921,12 @@
           ? `Löst på ${(d.ms / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })} sekunder med ${d.moves} drag.`
           : `${d.correct} av 8 brickor på rätt plats.`;
       }
+      if (r.type === 'kanot') {
+        what = d.finished
+          ? `Ni paddlade i mål på ${(d.ms / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })} sekunder.`
+          : `Ni hann ${d.dist} av ${r.length} meter.`;
+      }
+      if (r.type === 'bomb') what = `Ni desarmerade ${d.defused} ${d.defused === 1 ? 'bomb' : 'bomber'} och det small ${d.booms} ${d.booms === 1 ? 'gång' : 'gånger'}.`;
       if (r.type === 'labyrint') {
         what = d.finished
           ? `Ni gick i mål på ${(d.ms / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })} sekunder.`

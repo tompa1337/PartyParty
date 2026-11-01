@@ -11,6 +11,8 @@ const warmups = require('../content/warmup');
 const kingPrompts = require('../content/king');
 const puzzles = require('../content/puzzles');
 const M = require('./maze');
+const K = require('./kanot');
+const B = require('./bomb');
 
 const SCALE = Number(process.env.TIME_SCALE || 1);
 const T = (ms) => Math.round(ms * SCALE);
@@ -30,6 +32,9 @@ const DUR = {
   kingWrite: 45000,
   pussel: 120000,
   labyrint: 90000,
+  kanot: 80000,
+  bomb: 150000,
+  bombFlash: 1500,
   kingVote: 30000,
   warmup: 20000,
   reveal: 30000,
@@ -85,6 +90,22 @@ const SEGMENTS = {
       'Ni spelar i lag om två, lagen lottas',
       'En i laget styr bollen åt vänster och höger, den andra upp och ner',
       'Först i mål vinner. Hinner ingen, vinner laget som kom närmast målet',
+    ],
+  },
+  kanot: {
+    title: 'Kanotracet',
+    rules: [
+      'Ni spelar i lag om två, lagen lottas',
+      'En paddlar på vänster sida och en på höger. Tryck i mobilen för varje paddeltag',
+      'Paddlar ni i otakt svänger kanoten. Först i mål vinner',
+    ],
+  },
+  bomb: {
+    title: 'Bombdesarmeringen',
+    rules: [
+      'Ni spelar i lag om två, lagen lottas',
+      'En ser bomben och klipper. Den andra har manualen och säger vilken tråd. Ni byter efter varje bomb',
+      'Flest desarmerade bomber vinner. Fel tråd får bomben att smälla',
     ],
   },
   swipe: {
@@ -175,7 +196,7 @@ function scramble() {
 }
 
 // Alla delar i programordning. Uppvärmningen ligger utanför planen.
-const SEGMENT_ORDER = ['skiss', 'ordning', 'narmast', 'pussel', 'labyrint', 'swipe', 'king', 'final'];
+const SEGMENT_ORDER = ['skiss', 'ordning', 'kanot', 'narmast', 'pussel', 'labyrint', 'swipe', 'bomb', 'king', 'final'];
 
 // test = null för ett vanligt parti. I testläget: { segments: [...], humanIds: [...] }, en omgång per del.
 function buildPlan(playerIds = [], test = null) {
@@ -184,10 +205,12 @@ function buildPlan(playerIds = [], test = null) {
   const n = (normal) => (test ? 1 : normal);
   if (want('skiss')) for (const lm of pick(landmarks, n(3))) plan.push({ type: 'skiss', landmark: lm });
   if (want('ordning')) for (const items of pickInventionRounds(n(3), 5)) plan.push({ type: 'ordning', items });
+  // Lagspelen kräver jämnt antal spelare. Lagen lottas om inför varje lagspel.
+  const even = playerIds.length >= 2 && playerIds.length % 2 === 0;
+  if (want('kanot') && even) plan.push({ type: 'kanot', teams: makeTeams(playerIds) });
   if (want('narmast')) for (const q of pick(narmastQs, n(3))) plan.push({ type: 'narmast', q });
   if (want('pussel')) plan.push({ type: 'pussel', puzzle: pick(puzzles, 1)[0], start: scramble() });
-  // Labyrinten spelas i lag om två och bara när antalet spelare är jämnt.
-  if (want('labyrint') && playerIds.length >= 2 && playerIds.length % 2 === 0) {
+  if (want('labyrint') && even) {
     plan.push({ type: 'labyrint', maze: M.generate(MAZE_W, MAZE_H), teams: makeTeams(playerIds) });
   }
   if (want('swipe')) {
@@ -198,6 +221,7 @@ function buildPlan(playerIds = [], test = null) {
     ]);
     plan.push({ type: 'swipe', pair, words });
   }
+  if (want('bomb') && even) plan.push({ type: 'bomb', teams: makeTeams(playerIds) });
   if (want('king')) {
     // Kingen: en omgång per spelare. I testläget en omgång där du själv är kingen.
     const kings = test ? [(test.humanIds && test.humanIds[0]) || playerIds[0]].filter(Boolean) : shuffle(playerIds);
@@ -461,6 +485,19 @@ class Room {
         for (const p of this.players.values()) r.boards.set(p.id, { board: [...r.spec.start], moves: 0, solvedAt: null });
         this.setPhase('play', T(DUR.pussel), () => this.endPlay());
         break;
+      case 'kanot': {
+        r.boats = r.spec.teams.map(() => K.newBoat());
+        r.lastStroke = new Map();
+        r.lastTick = now;
+        this.setPhase('play', T(DUR.kanot), () => this.endPlay());
+        clearInterval(this.loop);
+        this.loop = setInterval(() => this.kanotTick(), MAZE_TICK);
+        break;
+      }
+      case 'bomb':
+        r.bombState = r.spec.teams.map(() => ({ idx: 0, defused: 0, booms: 0, lastAt: null, flash: null, bombs: [] }));
+        this.setPhase('play', T(DUR.bomb), () => this.endPlay());
+        break;
       case 'labyrint': {
         const mz = r.spec.maze;
         r.balls = r.spec.teams.map((t) => ({ x: mz.start.x + 0.5, y: mz.start.y + 0.5, finishedAt: null }));
@@ -582,7 +619,7 @@ class Room {
 
   teamOf(playerId) {
     const r = this.round;
-    if (!r || r.type !== 'labyrint') return null;
+    if (!r || !r.spec || !r.spec.teams) return null;
     return r.spec.teams.find((t) => t.x === playerId || t.y === playerId) || null;
   }
 
@@ -628,6 +665,98 @@ class Room {
       M.step(mz, ball, { x: xIn, y: yIn }, Math.min(dtMs, 250), BALL_SPEED);
       if (M.inGoal(mz, ball)) ball.finishedAt = now;
     });
+  }
+
+  // ---------- kanotracet ----------
+
+  // Vilka sidor spelaren paddlar på. Har lagkamraten lämnat paddlar man på båda.
+  sidesFor(playerId) {
+    return this.axesFor(playerId).map((a) => (a === 'x' ? 'L' : 'R'));
+  }
+
+  paddle(playerId, { side }) {
+    const r = this.round;
+    if (this.phase !== 'play' || !r || r.type !== 'kanot' || !r.boats) return null;
+    const t = this.teamOf(playerId);
+    if (!t) return null;
+    const boat = r.boats[t.id];
+    if (boat.finishedAt) return null;
+    const sides = this.sidesFor(playerId);
+    const sd = sides.includes(side) ? side : sides[0];
+    // Man kan inte spamma: minst MIN_GAP ms mellan två tag på samma sida.
+    const key = `${playerId}:${sd}`;
+    const now = Date.now();
+    if (now - (r.lastStroke.get(key) || 0) < K.MIN_GAP) return { ok: false };
+    r.lastStroke.set(key, now);
+    K.stroke(boat, sd);
+    return { ok: true };
+  }
+
+  kanotTick(now = Date.now()) {
+    const r = this.round;
+    if (this.phase !== 'play' || !r || r.type !== 'kanot') return clearInterval(this.loop);
+    this.kanotStep(now - r.lastTick, now);
+    r.lastTick = now;
+    if (r.boats.every((b) => b.finishedAt)) return this.endPlay();
+    this.changed();
+  }
+
+  kanotStep(dtMs, now = Date.now()) {
+    for (const boat of this.round.boats) {
+      if (boat.finishedAt) continue;
+      K.step(boat, dtMs);
+      if (boat.x >= K.LENGTH) {
+        boat.x = K.LENGTH;
+        boat.finishedAt = now;
+      }
+    }
+  }
+
+  // ---------- bombdesarmeringen ----------
+
+  // Den som klipper byts efter varje bomb. Har lagkamraten lämnat, eller är en bot,
+  // får man göra båda delarna själv och ser både bomben och manualen.
+  bombRole(playerId) {
+    const r = this.round;
+    const t = this.teamOf(playerId);
+    if (!t || !r.bombState) return null;
+    const mate = this.players.get(t.x === playerId ? t.y : t.x);
+    const me = this.players.get(playerId);
+    if (!mate || !mate.connected || (mate.bot && me && !me.bot)) return 'solo';
+    const st = r.bombState[t.id];
+    const defuser = st.idx % 2 === 0 ? t.x : t.y;
+    return defuser === playerId ? 'defuser' : 'expert';
+  }
+
+  bombAt(st, i) {
+    while (st.bombs.length <= i) st.bombs.push(B.generate(st.bombs.length));
+    return st.bombs[i];
+  }
+
+  cut(playerId, { bomb, wire }) {
+    const r = this.round;
+    if (this.phase !== 'play' || !r || r.type !== 'bomb') return null;
+    const t = this.teamOf(playerId);
+    if (!t) return null;
+    const st = r.bombState[t.id];
+    const now = Date.now();
+    if (Number(bomb) !== st.idx || (st.flash && now < st.flash.until)) return null;
+    const role = this.bombRole(playerId);
+    if (role !== 'defuser' && role !== 'solo') return null;
+    const b = this.bombAt(st, st.idx);
+    const w = Number(wire);
+    if (!(w >= 0 && w < b.wires.length)) return null;
+    const right = B.solution(b);
+    const correct = w === right;
+    if (correct) {
+      st.defused++;
+      st.lastAt = now;
+    } else st.booms++;
+    st.flash = { kind: correct ? 'ok' : 'boom', until: now + T(DUR.bombFlash), wire: w, right, n: st.idx + 1 };
+    st.idx++;
+    this.changed();
+    setTimeout(() => this.changed(), T(DUR.bombFlash) + 30);
+    return { correct, right };
   }
 
   // Kingen: varje spelare skickar listan med svar som hen tycker betyder samma som kingens.
@@ -805,6 +934,30 @@ class Room {
               detail: { solved: !!st.solvedAt, ms: ms == null ? null : Math.round(ms / SCALE), correct, moves: st.moves },
             };
           }
+          case 'kanot': {
+            const t = this.teamOf(p.id);
+            if (!t) return { ...base, perf: -1e9, tiebreak: Infinity, detail: null };
+            const boat = r.boats[t.id];
+            const ms = boat.finishedAt ? boat.finishedAt - r.playStart : null;
+            return {
+              ...base,
+              perf: boat.finishedAt ? 1e6 : Math.round(boat.x * 10),
+              tiebreak: boat.finishedAt ? ms : 0,
+              detail: { team: t.id, finished: !!boat.finishedAt, ms, dist: Math.round(boat.x), mate: t.x === p.id ? t.y : t.x, bumps: boat.bump },
+            };
+          }
+          case 'bomb': {
+            const t = this.teamOf(p.id);
+            if (!t) return { ...base, perf: -1e9, tiebreak: Infinity, detail: null };
+            const st = r.bombState[t.id];
+            // Flest desarmerade, sedan minst smällar, sist den som blev klar först.
+            return {
+              ...base,
+              perf: st.defused * 1000 - st.booms,
+              tiebreak: st.lastAt ? st.lastAt - r.playStart : 0,
+              detail: { team: t.id, defused: st.defused, booms: st.booms, mate: t.x === p.id ? t.y : t.x },
+            };
+          }
           case 'labyrint': {
             const t = this.teamOf(p.id);
             if (!t) return { ...base, perf: -1e9, tiebreak: Infinity, detail: null };
@@ -926,6 +1079,11 @@ class Room {
           const t = this.teamOf(p.id);
           return t && r.balls && r.balls[t.id].finishedAt ? 'done' : 'waiting';
         }
+        if (r.type === 'kanot') {
+          const t = this.teamOf(p.id);
+          return t && r.boats && r.boats[t.id].finishedAt ? 'done' : 'waiting';
+        }
+        if (r.type === 'bomb') return null;
         if (r.type === 'swipe') return a && a.finishedAt ? 'done' : 'waiting';
         return a && a.locked ? 'done' : 'waiting';
       }
@@ -1098,6 +1256,61 @@ class Room {
         }
         return o;
       }
+      case 'kanot': {
+        const o = { type: 'kanot', teams: this.teamsPublic(spec.teams), length: K.LENGTH, half: K.HALF };
+        if (this.phase === 'play' || reveal) {
+          o.boats = r.boats.map((b) => ({
+            x: Math.round(b.x * 100) / 100,
+            y: Math.round(b.y * 100) / 100,
+            th: Math.round(b.th * 1000) / 1000,
+            nL: b.nL,
+            nR: b.nR,
+            finished: !!b.finishedAt,
+            ms: b.finishedAt ? b.finishedAt - r.playStart : null,
+          }));
+        }
+        if (p) {
+          const t = this.teamOf(p.id);
+          if (t) {
+            o.myTeam = t.id;
+            o.mate = this.teamsPublic([t])[0][t.x === p.id ? 'y' : 'x'];
+            o.mySide = t.x === p.id ? 'L' : 'R';
+            o.mySides = this.phase === 'play' ? this.sidesFor(p.id) : [o.mySide];
+          }
+        }
+        return o;
+      }
+      case 'bomb': {
+        const o = { type: 'bomb', teams: this.teamsPublic(spec.teams) };
+        if ((this.phase === 'play' || reveal) && r.bombState) {
+          o.progress = r.bombState.map((st, i) => {
+            const t = spec.teams[i];
+            const fl = st.flash && st.flash.until > now ? { kind: st.flash.kind, n: st.flash.n } : null;
+            const solo = this.bombRole(t.x) === 'solo' ? t.x : this.bombRole(t.y) === 'solo' ? t.y : null;
+            return { defused: st.defused, booms: st.booms, n: st.idx + 1, defuser: st.idx % 2 === 0 ? t.x : t.y, solo, flash: fl };
+          });
+        }
+        if (p) {
+          const t = this.teamOf(p.id);
+          if (t) {
+            o.myTeam = t.id;
+            o.mate = this.teamsPublic([t])[0][t.x === p.id ? 'y' : 'x'];
+            if (this.phase === 'play' && r.bombState) {
+              const st = r.bombState[t.id];
+              o.role = this.bombRole(p.id);
+              o.n = st.idx + 1;
+              o.idx = st.idx;
+              if (st.flash && st.flash.until > now) o.flash = { ...st.flash, msLeft: st.flash.until - now };
+              if (o.role !== 'expert') {
+                const b = this.bombAt(st, st.idx);
+                o.bomb = { wires: b.wires, serial: b.serial };
+              }
+              if (o.role !== 'defuser') o.manual = B.MANUAL;
+            }
+          }
+        }
+        return o;
+      }
       case 'labyrint': {
         const mz = spec.maze;
         const who = (id) => {
@@ -1156,6 +1369,14 @@ class Room {
       default:
         return { type: r.type };
     }
+  }
+
+  teamsPublic(teams) {
+    const who = (id) => {
+      const pl = this.players.get(id) || { name: '?', emoji: '🙂', connected: false };
+      return { id, name: pl.name, emoji: pl.emoji, connected: !!pl.connected };
+    };
+    return teams.map((t) => ({ id: t.id, color: t.color, name: t.name, x: who(t.x), y: who(t.y) }));
   }
 
   resultsPublic(r) {
