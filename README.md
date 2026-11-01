@@ -10,6 +10,8 @@ Ett partyspel för soffan. TV:n visar spelet, alla spelar med sin egen mobil och
 
 Alla börjar på 0. I vanliga omgångar får man **placeringspoäng**: sist får 100 och varje plats uppåt ger 100 till. Med 6 spelare blir det 600, 500, 400, 300, 200 och 100. I Ordningen och Höger eller vänster avgör antal rätt alltid före snabbhet; tiden räknas bara mellan dem med lika många rätt. Delad placering delar på poängen. Efter varje omgång visar TV:n en topplista med allas svar och totalpoäng.
 
+I **Labyrinten** får båda i laget samma placering och delar på poängen för de platserna. Med fyra spelare får vinnarlaget 350 var och det andra laget 150 var. Lämnar någon mitt i tar lagkamraten över båda riktningarna.
+
 I **finalen** satsar man före varje fråga, från 0 till allt man har. Alla rankas efter frågan, rätt svar först och sedan efter snabbhet. Etta får satsningen ×2 och sist ×0, med en jämn skala däremellan (med 6 spelare ×2, ×1,6, ×1,2, ×0,8, ×0,4, ×0). Fel svar förlorar alltid hela satsningen. Står man på 0 när det är dags att satsa får man 50 poäng att spela med.
 
 | Del | Omgångar | Vad man gör |
@@ -19,6 +21,7 @@ I **finalen** satsar man före varje fråga, från 0 till allt man har. Alla ran
 | Ordningen | 3 | Sortera fem uppfinningar från äldst till nyast |
 | Mellan 0–1000 | 3 | Svaret ligger alltid mellan 0 och 1000. Dra reglaget, närmast vinner |
 | Pusslet | 1 | Klassiskt pussel med 9 rutor, en tom. Alla får samma bild och samma blandning. Snabbast löst vinner, hinner ingen vinner flest brickor på rätt plats |
+| Labyrinten | 1 | Bara med jämnt antal spelare. Lagen om två lottas. Alla lag kör samma labyrint på TV:n, en i laget styr bollen vänster–höger och den andra upp–ner. Först i mål vinner, annars laget närmast målet. Lagkamraterna delar på poängen |
 | Höger eller vänster | 1 | 20 ord på 30 sekunder. Flest rätt vinner. Fel svar skakar och spärrar en sekund |
 | Kingen | en per spelare | Alla blir kingen en gång. Kingen skriver det hen tror att någon annan skriver: +100 per träff. De som skrev samma får −100, alla andra +100. Svar som inte är exakt samma röstar alla om |
 | Finalen | 5 | Jeopardy-stil: se kategorin, satsa, svara snabbt och rätt |
@@ -88,12 +91,14 @@ Allt innehåll ligger i `content/` och är lätt att bygga ut:
 server/index.js    webbserver och Socket.IO
 server/game.js     spelrummet och alla faser
 server/scoring.js  poängräkning
+server/maze.js     Labyrinten: slumpad labyrint och bollens rörelse
 server/bots.js     botar för testläget
 private/test.html  testsidan (skyddas av TEST_PASSWORD)
 public/            TV-vy (tv.html) och mobilvy (play.html)
 content/           frågor och skisser
 test/simulate.js   helt parti med botar
 test/test-mode.js  testsidan och testläget
+test/labyrint.js   Labyrinten: lag, rörelse och poäng
 ```
 
 Världskartan ritas från [world-atlas](https://github.com/topojson/world-atlas) (Natural Earth, fri att använda) som följer med appen. Den behöver ingen nyckel och inget konto.

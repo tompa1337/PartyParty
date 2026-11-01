@@ -1,6 +1,8 @@
 // Botar för testläget. De är vanliga spelare i rummet (bot: true) som svarar själva
 // med lite slump och fördröjning, så att man kan prova spelet ensam.
 
+const M = require('./maze');
+
 const NAMES = ['Robot Rut', 'Bot Bengt', 'Kalkyl-Kim', 'Chip Charlie', 'Data Doris'];
 const EMOJIS = ['🤖', '👾', '🛸', '🦾', '🎲'];
 const KING_WORDS = ['Näsa', 'Glasögon', 'Äpple', 'Hund', 'Blå', 'Mjölk', 'Lärare', 'Tandborste', 'Bil', 'Sol', 'Fotboll', 'Katt'];
@@ -129,6 +131,27 @@ function play(room, p, key, r) {
         setTimeout(next, rand(900, 1500) + (res && res.correct === false ? 1000 : 0));
       };
       return later(room, p, key, start + rand(300, 900), next);
+    }
+    case 'labyrint': {
+      // Botar styr sin axel mot nästa ruta på kortaste vägen, med lite reaktionstid och ibland fel.
+      const steerLoop = () => {
+        if (`${room.phase}:${room.roundIndex}` !== key || !r.balls) return;
+        const t = room.teamOf(p.id);
+        if (!t) return;
+        const ball = r.balls[t.id];
+        if (ball.finishedAt) return;
+        const mz = spec.maze;
+        const c = M.cellOf(mz, ball);
+        const next = M.nextCell(mz, c.x, c.y);
+        for (const axis of room.axesFor(p.id)) {
+          const diff = next[axis] + 0.5 - ball[axis];
+          let dir = Math.abs(diff) > 0.08 ? Math.sign(diff) : 0;
+          if (chance(0.08)) dir = -dir;
+          room.steer(p.id, { axis, dir });
+        }
+        setTimeout(steerLoop, rand(120, 280));
+      };
+      return later(room, p, key, rand(600, 1500), steerLoop);
     }
     case 'king': {
       const text = pickOne(KING_WORDS);

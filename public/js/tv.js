@@ -13,6 +13,7 @@
   let drawStart = null;
   let drawMs = null;
   let map = null;
+  let lab = null; // Labyrinten: canvas och bollarnas positioner
 
   // Testläge: inställningarna kommer från /test via adressen (?test=...).
   let testOpts = null;
@@ -132,6 +133,7 @@
 
   function cleanup() {
     sketch = null;
+    lab = null;
     drawStart = null;
     if (map) {
       map.remove();
@@ -211,6 +213,7 @@
     if (s.phase === 'play' && s.round && s.round.type === 'swipe') return updateSwipe(s);
     if (s.phase === 'play' && s.round && s.round.type === 'king') return buildPlay(s);
     if (s.phase === 'play' && s.round && s.round.type === 'pussel') return updatePussel(s);
+    if (s.phase === 'play' && s.round && s.round.type === 'labyrint') return updateLabyrint(s);
     if (s.phase === 'vote') return buildVote(s);
     if (s.phase === 'reveal') {
       const w = stage.querySelector('.res .wait span');
@@ -268,9 +271,14 @@
         <p class="kicker">Nästa del</p>
         <h1><span class="mark">${esc(seg.title)}</span></h1>
         <p class="n soft">${seg.count > 1 ? `${seg.count} omgångar` : 'En omgång'}. ${
-          seg.type === 'final' ? 'Satsa före varje fråga.' : `Etta får ${s.players.length * 100} poäng, sist får 100.`
+          seg.type === 'final'
+            ? 'Satsa före varje fråga.'
+            : seg.type === 'labyrint'
+              ? `Lagkamraterna delar på poängen. Vinnarlaget får ${(2 * s.players.length - 1) * 50} poäng var.`
+              : `Etta får ${s.players.length * 100} poäng, sist får 100.`
         }</p>
         <ul>${seg.rules.map((r) => `<li>${esc(r)}</li>`).join('')}</ul>
+        ${seg.type === 'labyrint' && s.round && s.round.teams ? `<div class="lab-teams">${s.round.teams.map((t) => teamChip(t)).join('')}</div>` : ''}
       </div>`;
   }
 
@@ -319,6 +327,12 @@
           </div>
         </div>`;
       updatePussel(s);
+    } else if (r.type === 'labyrint') {
+      stage.innerHTML = `
+        <div class="lab-wrap"><canvas id="maze"></canvas></div>
+        <div class="lab-teams" id="labteams"></div>`;
+      startLab($('#maze'), r);
+      updateLabyrint(s);
     } else if (r.type === 'king') {
       const done = s.players.filter((p) => p.connected && p.status === 'done').length;
       const n = s.players.filter((p) => p.connected).length;
@@ -357,6 +371,123 @@
     if (!sketch || drawStart == null) return;
     sketch.setProgress((performance.now() - drawStart) / drawMs);
     requestAnimationFrame(drawLoop);
+  }
+
+  // ---------- Labyrinten ----------
+  const secs = (ms) => (ms / 1000).toLocaleString('sv-SE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+  function teamChip(t, ball) {
+    let status = '';
+    if (ball) status = ball.finished ? `<span class="st ok">🏁 ${secs(ball.ms)} s</span>` : `<span class="st">${ball.left} steg kvar</span>`;
+    const who = (m, arrow) => `<span class="${m.connected ? '' : 'gone'}">${esc(m.emoji)} ${esc(m.name)} <span class="ax">${arrow}</span></span>`;
+    return `<div class="lab-team sheet ${ball && ball.finished ? 'done' : ''}" style="--team:${esc(t.color)}">
+      <span class="dot"></span><b>Lag ${esc(t.name)}</b>${who(t.x, '↔')}${who(t.y, '↕')}${status}</div>`;
+  }
+
+  function updateLabyrint(s) {
+    const r = s.round;
+    if (!lab || !r.balls) return;
+    lab.round = r;
+    const el = $('#labteams');
+    if (el) {
+      const html = r.teams.map((t) => teamChip(t, r.balls[t.id])).join('');
+      if (el.dataset.html !== html) {
+        el.innerHTML = html;
+        el.dataset.html = html;
+      }
+    }
+  }
+
+  function startLab(canvas, round) {
+    lab = { canvas, round, disp: round.balls.map((b) => ({ x: b.x, y: b.y })) };
+    const me = lab;
+    let last = performance.now();
+    const loop = (now) => {
+      if (lab !== me || !canvas.isConnected) return;
+      const k = Math.min(1, ((now - last) / 1000) * 18);
+      last = now;
+      me.round.balls.forEach((b, i) => {
+        const d = me.disp[i] || (me.disp[i] = { x: b.x, y: b.y });
+        d.x += (b.x - d.x) * k;
+        d.y += (b.y - d.y) * k;
+      });
+      drawMaze(canvas, me.round, me.disp);
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  }
+
+  function drawMaze(canvas, r, disp) {
+    const mz = r.maze;
+    const dpr = window.devicePixelRatio || 1;
+    const W = canvas.clientWidth;
+    const H = canvas.clientHeight;
+    if (!W || !H) return;
+    if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)) {
+      canvas.width = Math.round(W * dpr);
+      canvas.height = Math.round(H * dpr);
+    }
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    const cell = Math.min((W - 8) / mz.w, (H - 8) / mz.h);
+    const ox = (W - cell * mz.w) / 2;
+    const oy = (H - cell * mz.h) / 2;
+    const X = (x) => ox + x * cell;
+    const Y = (y) => oy + y * cell;
+
+    // Golv, start och mål
+    ctx.fillStyle = 'rgba(20, 16, 50, 0.85)';
+    ctx.fillRect(X(0), Y(0), cell * mz.w, cell * mz.h);
+    ctx.fillStyle = 'rgba(141, 125, 255, 0.16)';
+    ctx.fillRect(X(mz.start.x), Y(mz.start.y), cell, cell);
+    ctx.fillStyle = 'rgba(255, 181, 71, 0.22)';
+    ctx.fillRect(X(mz.goal.x), Y(mz.goal.y), cell, cell);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `${cell * 0.6}px system-ui, sans-serif`;
+    ctx.fillText('🏁', X(mz.goal.x + 0.5), Y(mz.goal.y + 0.52));
+
+    // Väggar som neonrör
+    ctx.strokeStyle = '#a99bff';
+    ctx.lineWidth = Math.max(2, cell * 0.1);
+    ctx.lineCap = 'round';
+    ctx.shadowColor = 'rgba(141, 125, 255, 0.9)';
+    ctx.shadowBlur = cell * 0.25;
+    ctx.beginPath();
+    for (let y = 0; y < mz.h; y++) {
+      for (let x = 0; x < mz.w; x++) {
+        const c = mz.cells[y * mz.w + x];
+        if (c & 1) { ctx.moveTo(X(x), Y(y)); ctx.lineTo(X(x + 1), Y(y)); }
+        if (c & 8) { ctx.moveTo(X(x), Y(y)); ctx.lineTo(X(x), Y(y + 1)); }
+        if (x === mz.w - 1 && c & 2) { ctx.moveTo(X(x + 1), Y(y)); ctx.lineTo(X(x + 1), Y(y + 1)); }
+        if (y === mz.h - 1 && c & 4) { ctx.moveTo(X(x), Y(y + 1)); ctx.lineTo(X(x + 1), Y(y + 1)); }
+      }
+    }
+    ctx.stroke();
+
+    // Bollar. Varje lag förskjuts lite så att bollar på samma ställe syns var för sig.
+    const n = r.teams.length;
+    r.teams.forEach((t, i) => {
+      const p = disp[i];
+      if (!p) return;
+      const a = (i / n) * Math.PI * 2;
+      const off = n > 1 ? cell * 0.13 : 0;
+      const cx = X(p.x) + Math.cos(a) * off;
+      const cy = Y(p.y) + Math.sin(a) * off;
+      ctx.shadowColor = t.color;
+      ctx.shadowBlur = cell * 0.5;
+      ctx.fillStyle = t.color;
+      ctx.beginPath();
+      ctx.arc(cx, cy, cell * 0.28, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
+      ctx.beginPath();
+      ctx.arc(cx - cell * 0.08, cy - cell * 0.09, cell * 0.08, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.shadowBlur = 0;
   }
 
   function updatePussel(s) {
@@ -418,6 +549,13 @@
         return d.solved
           ? `Löst på ${(d.ms / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })} s <span class="soft">· ${d.moves} drag</span>`
           : `${d.correct} av 8 rätt <span class="soft">· ej löst</span>`;
+      case 'labyrint': {
+        const t = round.teams[d.team];
+        const mate = t ? [t.x, t.y].find((m) => m.id === d.mate) : null;
+        const dot = t ? `<span class="tdot" style="background:${esc(t.color)}"></span>` : '';
+        const res = d.finished ? `I mål på ${secs(d.ms)} s` : `${d.left} steg kvar`;
+        return `${dot}${res}${mate ? ` <span class="soft">· med ${esc(mate.emoji)} ${esc(mate.name)}</span>` : ''}`;
+      }
       case 'king': {
         if (d.verdict === 'king') return `<b>${esc(d.text || '–')}</b> <span class="soft">· 👑 kingen, ${d.same} träff${d.same === 1 ? '' : 'ar'}</span>`;
         const vote = d.voted ? ` <span class="soft">· röstat ${d.voted.yes}–${d.voted.no}</span>` : '';
@@ -489,6 +627,14 @@
     } else if (r.type === 'pussel') {
       left = `<h2><span class="mark">${esc(r.name)}</span></h2>
         <div class="pz-big sheet" style="max-width:24rem"><svg viewBox="0 0 300 300">${r.svg}</svg></div>`;
+    } else if (r.type === 'labyrint') {
+      const order = [...r.balls].sort((a, b) => (a.finished !== b.finished ? (a.finished ? -1 : 1) : a.finished ? a.ms - b.ms : a.left - b.left));
+      const best = order[0];
+      const w = best && r.teams[best.team];
+      const title = !w ? 'Labyrinten' : best.finished ? `Lag ${esc(w.name)} vann!` : `Ingen kom i mål`;
+      const sub = !w ? '' : best.finished ? `I mål på ${secs(best.ms)} sekunder.` : `Lag ${esc(w.name)} kom närmast, ${best.left} steg kvar.`;
+      left = `<h2><span class="mark">${title}</span></h2><p class="fact">${sub}</p>
+        <div class="lab-wrap mini"><canvas id="maze"></canvas></div>`;
     } else if (r.type === 'king') {
       left = `<p class="sub">${esc(r.prompt)}</p>
         <p class="king-who"><span class="crown">👑</span> ${esc(r.kingEmoji)} ${esc(r.kingName)} skrev</p>
@@ -510,6 +656,7 @@
     stage.innerHTML = `<div class="reveal"><div class="left">${left}</div>${resultTable(s)}</div>`;
     $('#next').addEventListener('click', () => socket.emit('host:next'));
     if (r.type === 'skiss') drawRevealMap(s);
+    if (r.type === 'labyrint' && r.maze) startLab($('#maze'), r);
   }
 
   function drawRevealMap(s) {

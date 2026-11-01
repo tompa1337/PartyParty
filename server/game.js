@@ -10,6 +10,7 @@ const finalQs = require('../content/final');
 const warmups = require('../content/warmup');
 const kingPrompts = require('../content/king');
 const puzzles = require('../content/puzzles');
+const M = require('./maze');
 
 const SCALE = Number(process.env.TIME_SCALE || 1);
 const T = (ms) => Math.round(ms * SCALE);
@@ -28,6 +29,7 @@ const DUR = {
   finalQuestion: 12000,
   kingWrite: 45000,
   pussel: 120000,
+  labyrint: 90000,
   kingVote: 30000,
   warmup: 20000,
   reveal: 30000,
@@ -37,6 +39,19 @@ const DUR = {
 const START_POINTS = 0;
 const RESCUE_POINTS = 50;
 const SWIPE_WORDS_PER_SIDE = 10;
+
+// Labyrinten
+const MAZE_W = 17;
+const MAZE_H = 10;
+const BALL_SPEED = 3.5; // rutor per sekund
+const MAZE_TICK = 50; // ms mellan varje fysiksteg
+const TEAM_COLORS = [
+  { color: '#ffb547', name: 'Orange' },
+  { color: '#4fe3b0', name: 'Gröna' },
+  { color: '#8d7dff', name: 'Lila' },
+  { color: '#ff6b7a', name: 'Röda' },
+  { color: '#5cc8ff', name: 'Blå' },
+];
 
 const SEGMENTS = {
   warmup: { title: 'Uppvärmning', rules: ['En fråga utan poäng', 'Svara i mobilen så ser ni hur det funkar'] },
@@ -62,6 +77,14 @@ const SEGMENTS = {
       'Alla får samma bild i nio rutor, en är tom',
       'Tryck eller dra brickorna till den tomma rutan tills bilden är hel',
       'Snabbast löst vinner. Hinner ingen, vinner den med flest brickor på rätt plats',
+    ],
+  },
+  labyrint: {
+    title: 'Labyrinten',
+    rules: [
+      'Ni spelar i lag om två, lagen lottas',
+      'En i laget styr bollen åt vänster och höger, den andra upp och ner',
+      'Först i mål vinner. Hinner ingen, vinner laget som kom närmast målet',
     ],
   },
   swipe: {
@@ -152,7 +175,7 @@ function scramble() {
 }
 
 // Alla delar i programordning. Uppvärmningen ligger utanför planen.
-const SEGMENT_ORDER = ['skiss', 'ordning', 'narmast', 'pussel', 'swipe', 'king', 'final'];
+const SEGMENT_ORDER = ['skiss', 'ordning', 'narmast', 'pussel', 'labyrint', 'swipe', 'king', 'final'];
 
 // test = null för ett vanligt parti. I testläget: { segments: [...], humanIds: [...] }, en omgång per del.
 function buildPlan(playerIds = [], test = null) {
@@ -163,6 +186,10 @@ function buildPlan(playerIds = [], test = null) {
   if (want('ordning')) for (const items of pickInventionRounds(n(3), 5)) plan.push({ type: 'ordning', items });
   if (want('narmast')) for (const q of pick(narmastQs, n(3))) plan.push({ type: 'narmast', q });
   if (want('pussel')) plan.push({ type: 'pussel', puzzle: pick(puzzles, 1)[0], start: scramble() });
+  // Labyrinten spelas i lag om två och bara när antalet spelare är jämnt.
+  if (want('labyrint') && playerIds.length >= 2 && playerIds.length % 2 === 0) {
+    plan.push({ type: 'labyrint', maze: M.generate(MAZE_W, MAZE_H), teams: makeTeams(playerIds) });
+  }
   if (want('swipe')) {
     const pair = pick(swipePairs, 1)[0];
     const words = shuffle([
@@ -179,6 +206,17 @@ function buildPlan(playerIds = [], test = null) {
   }
   if (want('final')) for (const q of pick(finalQs, n(5))) plan.push({ type: 'final', q });
   return plan;
+}
+
+// Lottar lag om två. I varje lag styr den ena vänster–höger (x) och den andra upp–ner (y).
+function makeTeams(playerIds) {
+  const ids = shuffle(playerIds);
+  const teams = [];
+  for (let i = 0; i + 1 < ids.length; i += 2) {
+    const c = TEAM_COLORS[teams.length % TEAM_COLORS.length];
+    teams.push({ id: teams.length, color: c.color, name: c.name, x: ids[i], y: ids[i + 1] });
+  }
+  return teams;
 }
 
 class Room {
@@ -248,6 +286,7 @@ class Room {
     const p = this.players.get(playerId);
     if (!p) return;
     p.connected = false;
+    if (this.round && this.round.inputs && this.round.inputs.has(playerId)) this.round.inputs.set(playerId, { x: 0, y: 0 });
     if (this.phase === 'lobby') {
       p.ready = false;
       p.dropAt = Date.now() + DUR.lobbyDropMs;
@@ -422,6 +461,17 @@ class Room {
         for (const p of this.players.values()) r.boards.set(p.id, { board: [...r.spec.start], moves: 0, solvedAt: null });
         this.setPhase('play', T(DUR.pussel), () => this.endPlay());
         break;
+      case 'labyrint': {
+        const mz = r.spec.maze;
+        r.balls = r.spec.teams.map((t) => ({ x: mz.start.x + 0.5, y: mz.start.y + 0.5, finishedAt: null }));
+        r.inputs = new Map();
+        for (const t of r.spec.teams) for (const id of [t.x, t.y]) r.inputs.set(id, { x: 0, y: 0 });
+        r.lastTick = now;
+        this.setPhase('play', T(DUR.labyrint), () => this.endPlay());
+        clearInterval(this.loop);
+        this.loop = setInterval(() => this.labyrintTick(), MAZE_TICK);
+        break;
+      }
       default:
         this.endPlay();
     }
@@ -528,6 +578,58 @@ class Room {
     return { ok: true, board: st.board, solved: !!st.solvedAt };
   }
 
+  // ---------- labyrinten ----------
+
+  teamOf(playerId) {
+    const r = this.round;
+    if (!r || r.type !== 'labyrint') return null;
+    return r.spec.teams.find((t) => t.x === playerId || t.y === playerId) || null;
+  }
+
+  // Vilka axlar spelaren får styra. Har lagkamraten lämnat tar man över båda.
+  axesFor(playerId) {
+    const t = this.teamOf(playerId);
+    if (!t) return [];
+    const own = t.x === playerId ? 'x' : 'y';
+    const mate = this.players.get(own === 'x' ? t.y : t.x);
+    return mate && mate.connected ? [own] : ['x', 'y'];
+  }
+
+  // Mobilen skickar riktningen när en knapp trycks ner (−1 eller 1) och släpps (0).
+  steer(playerId, { axis, dir }) {
+    const r = this.round;
+    if (this.phase !== 'play' || !r || r.type !== 'labyrint' || !r.inputs || !r.inputs.has(playerId)) return null;
+    const axes = this.axesFor(playerId);
+    const a = axes.includes(axis) ? axis : axes[0];
+    const d = Math.sign(Number(dir)) || 0;
+    r.inputs.get(playerId)[a] = d;
+    return { ok: true };
+  }
+
+  labyrintTick(now = Date.now()) {
+    const r = this.round;
+    if (this.phase !== 'play' || !r || r.type !== 'labyrint') return clearInterval(this.loop);
+    this.labyrintStep(now - r.lastTick, now);
+    r.lastTick = now;
+    if (r.balls.every((b) => b.finishedAt)) return this.endPlay();
+    this.changed();
+  }
+
+  labyrintStep(dtMs, now = Date.now()) {
+    const r = this.round;
+    const mz = r.spec.maze;
+    const live = (id) => (this.players.get(id) || {}).connected;
+    r.spec.teams.forEach((t, i) => {
+      const ball = r.balls[i];
+      if (ball.finishedAt) return;
+      // Varje axel styrs av sin spelare, eller av lagkamraten om den spelaren har lämnat.
+      const xIn = live(t.x) ? r.inputs.get(t.x).x : r.inputs.get(t.y).x;
+      const yIn = live(t.y) ? r.inputs.get(t.y).y : r.inputs.get(t.x).y;
+      M.step(mz, ball, { x: xIn, y: yIn }, Math.min(dtMs, 250), BALL_SPEED);
+      if (M.inGoal(mz, ball)) ball.finishedAt = now;
+    });
+  }
+
   // Kingen: varje spelare skickar listan med svar som hen tycker betyder samma som kingens.
   vote(playerId, data) {
     const r = this.round;
@@ -617,6 +719,7 @@ class Room {
     if (this.phase !== 'play' && this.phase !== 'vote') return;
     const r = this.round;
     if (r.type === 'king' && !r.voteDone) return this.startKingVote();
+    clearInterval(this.loop);
     const end = Date.now();
     const players = [...this.players.values()];
     let rows;
@@ -702,6 +805,21 @@ class Room {
               detail: { solved: !!st.solvedAt, ms: ms == null ? null : Math.round(ms / SCALE), correct, moves: st.moves },
             };
           }
+          case 'labyrint': {
+            const t = this.teamOf(p.id);
+            if (!t) return { ...base, perf: -1e9, tiebreak: Infinity, detail: null };
+            const ball = r.balls[t.id];
+            const left = M.stepsLeft(r.spec.maze, ball);
+            const ms = ball.finishedAt ? ball.finishedAt - r.playStart : null;
+            const mateId = t.x === p.id ? t.y : t.x;
+            // Lagkamraterna får exakt samma resultat och delar därför placering och poäng.
+            return {
+              ...base,
+              perf: ball.finishedAt ? 1e6 : -left,
+              tiebreak: ball.finishedAt ? ms : 0,
+              detail: { team: t.id, finished: !!ball.finishedAt, ms, left, mate: mateId, axis: t.x === p.id ? 'x' : 'y' },
+            };
+          }
           default:
             return { ...base, perf: 0, tiebreak: 0, detail: null };
         }
@@ -766,11 +884,14 @@ class Room {
 
   finish() {
     clearTimeout(this.timer);
+    clearInterval(this.loop);
     this.round = null;
     this.setPhase('podium', null, null);
   }
 
   restart() {
+    clearTimeout(this.timer);
+    clearInterval(this.loop);
     for (const p of this.players.values()) {
       p.ready = !!p.bot;
       p.points = START_POINTS;
@@ -801,6 +922,10 @@ class Room {
       case 'play': {
         const a = r.answers.get(p.id);
         if (r.type === 'pussel') return r.boards && r.boards.get(p.id) && r.boards.get(p.id).solvedAt ? 'done' : 'waiting';
+        if (r.type === 'labyrint') {
+          const t = this.teamOf(p.id);
+          return t && r.balls && r.balls[t.id].finishedAt ? 'done' : 'waiting';
+        }
         if (r.type === 'swipe') return a && a.finishedAt ? 'done' : 'waiting';
         return a && a.locked ? 'done' : 'waiting';
       }
@@ -973,6 +1098,38 @@ class Room {
         }
         return o;
       }
+      case 'labyrint': {
+        const mz = spec.maze;
+        const who = (id) => {
+          const pl = this.players.get(id) || { name: '?', emoji: '🙂', connected: false };
+          return { id, name: pl.name, emoji: pl.emoji, connected: !!pl.connected };
+        };
+        const o = {
+          type: 'labyrint',
+          teams: spec.teams.map((t) => ({ id: t.id, color: t.color, name: t.name, x: who(t.x), y: who(t.y) })),
+        };
+        if (this.phase === 'play' || reveal) {
+          o.maze = { w: mz.w, h: mz.h, cells: mz.cells, start: mz.start, goal: mz.goal };
+          o.balls = r.balls.map((b, i) => ({
+            x: Math.round(b.x * 1000) / 1000,
+            y: Math.round(b.y * 1000) / 1000,
+            finished: !!b.finishedAt,
+            ms: b.finishedAt ? b.finishedAt - r.playStart : null,
+            left: M.stepsLeft(mz, b),
+            team: i,
+          }));
+        }
+        if (p) {
+          const t = this.teamOf(p.id) || spec.teams.find((x) => x.x === p.id || x.y === p.id);
+          if (t) {
+            o.myTeam = t.id;
+            o.mate = who(t.x === p.id ? t.y : t.x);
+            o.myAxis = t.x === p.id ? 'x' : 'y';
+            o.myAxes = this.phase === 'play' ? this.axesFor(p.id) : [o.myAxis];
+          }
+        }
+        return o;
+      }
       case 'king': {
         const k = this.players.get(spec.kingId) || { name: '?', emoji: '👑' };
         const o = { type: 'king', kingId: spec.kingId, kingName: k.name, kingEmoji: k.emoji, prompt: spec.prompt };
@@ -1031,4 +1188,4 @@ function pickKeys(obj, keys) {
   return Object.fromEntries(keys.map((k) => [k, obj[k]]));
 }
 
-module.exports = { Room, DUR, SEGMENTS, SEGMENT_ORDER, START_POINTS, buildPlan, scramble, correctTiles, neighbours, BLANK };
+module.exports = { Room, DUR, SEGMENTS, SEGMENT_ORDER, START_POINTS, buildPlan, scramble, correctTiles, neighbours, BLANK, makeTeams, BALL_SPEED };

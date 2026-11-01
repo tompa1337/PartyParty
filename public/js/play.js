@@ -140,6 +140,7 @@
       case 'warmup-reveal':
         return buildWarmup(s);
       case 'segment-intro':
+        if (s.segment.type === 'labyrint' && s.round && s.round.mate) return labyrintIntro(s);
         app.innerHTML = `<div class="center"><p class="lead soft">Nästa del</p><h1 class="title"><span class="mark">${esc(s.segment.title)}</span></h1>
           <p class="lead">${s.segment.rules.map(esc).join('. ')}.</p><p class="soft">${s.segment.type === 'final' ? 'Snart dags att satsa.' : 'Snart börjar det. Titta på TV:n.'}</p></div>`;
         return;
@@ -163,6 +164,7 @@
 
   function update(s) {
     if (s.phase === 'lobby') return buildLobby(s);
+    if (s.phase === 'play' && s.round && s.round.type === 'labyrint') return updateLabyrint(s);
     if (s.phase === 'reveal' || s.phase === 'warmup-reveal') {
       const b = $('#next');
       if (b && s.me.pressedNext) {
@@ -292,6 +294,107 @@
     if (r.type === 'final') return playFinal(s);
     if (r.type === 'king') return playKing(s);
     if (r.type === 'pussel') return playPussel(s);
+    if (r.type === 'labyrint') return playLabyrint(s);
+  }
+
+  // ---------- Labyrinten ----------
+  const AXIS_TEXT = {
+    x: 'Du styr <b>vänster och höger</b>.',
+    y: 'Du styr <b>upp och ner</b>.',
+    xy: 'Din lagkamrat har lämnat, så du styr <b>åt alla håll</b>.',
+  };
+
+  function teamHead(r) {
+    const t = r.teams[r.myTeam];
+    return `<div class="lab-head" style="--team:${esc(t.color)}"><span class="dot"></span><span><b>Lag ${esc(t.name)}</b> med ${esc(r.mate.emoji)} ${esc(r.mate.name)}</span></div>`;
+  }
+
+  function labyrintIntro(s) {
+    const r = s.round;
+    app.innerHTML = `<div class="center">
+      <p class="lead soft">Nästa del</p>
+      <h1 class="title"><span class="mark">${esc(s.segment.title)}</span></h1>
+      ${teamHead(r)}
+      <p class="lead">${AXIS_TEXT[r.myAxis]} ${esc(r.mate.name)} styr ${r.myAxis === 'x' ? 'upp och ner' : 'vänster och höger'}.</p>
+      <p class="lead">Lotsa er boll genom labyrinten på TV:n till 🏁. Prata med varandra!</p>
+      <p class="soft">Snart börjar det. Titta på TV:n.</p></div>`;
+  }
+
+  function labKey(r) {
+    const ball = r.balls && r.balls[r.myTeam];
+    return `${(r.myAxes || []).join('')}|${ball && ball.finished ? 1 : 0}`;
+  }
+
+  function updateLabyrint(s) {
+    const r = s.round;
+    if (labKey(r) !== ui.labKey) {
+      teardown();
+      return playLabyrint(s);
+    }
+    const ball = r.balls && r.balls[r.myTeam];
+    const el = $('#lableft');
+    if (el && ball) el.textContent = `${ball.left} steg kvar till målet`;
+  }
+
+  function playLabyrint(s) {
+    const r = s.round;
+    if (r.myTeam == null) return waitingScreen('Labyrinten', 'Titta på TV:n.');
+    const ball = r.balls[r.myTeam];
+    ui.labKey = labKey(r);
+    if (ball.finished) {
+      if (navigator.vibrate) navigator.vibrate([60, 40, 120]);
+      return waitingScreen('<span class="mark">I mål! 🏁</span>', `Ni klarade det på ${(ball.ms / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })} sekunder. Väntar på de andra lagen.`);
+    }
+    const axes = r.myAxes || [r.myAxis];
+    const both = axes.length > 1;
+    const btn = (axis, dir, sym, label, cls = '') =>
+      `<button class="lab-btn ${cls}" data-axis="${axis}" data-dir="${dir}"><span class="sym">${sym}</span><span class="lbl">${label}</span></button>`;
+    let pad;
+    if (both) {
+      pad = `<div class="pad pad-all">
+        ${btn('y', -1, '▲', 'Upp', 'u')}${btn('x', -1, '◀', 'Vänster', 'l')}${btn('x', 1, '▶', 'Höger', 'r')}${btn('y', 1, '▼', 'Ner', 'd')}
+      </div>`;
+    } else if (axes[0] === 'x') {
+      pad = `<div class="pad pad-x">${btn('x', -1, '◀', 'Vänster')}${btn('x', 1, '▶', 'Höger')}</div>`;
+    } else {
+      pad = `<div class="pad pad-y">${btn('y', -1, '▲', 'Upp')}${btn('y', 1, '▼', 'Ner')}</div>`;
+    }
+    app.innerHTML = `
+      ${teamHead(r)}
+      <p class="lead" style="margin:0">${both ? AXIS_TEXT.xy : AXIS_TEXT[axes[0]]} Håll in knappen. Titta på TV:n.</p>
+      ${pad}
+      <p class="count" id="lableft">${ball.left} steg kvar till målet</p>`;
+
+    // Håll in för att rulla, släpp för att stanna. Bara en riktning per axel åt gången.
+    const active = { x: 0, y: 0 };
+    const send = (axis, dir) => {
+      active[axis] = dir;
+      socket.emit('player:steer', { axis, dir });
+    };
+    app.querySelectorAll('.lab-btn').forEach((b) => {
+      const axis = b.dataset.axis;
+      const dir = Number(b.dataset.dir);
+      const press = (e) => {
+        e.preventDefault();
+        if (e.pointerId != null && b.setPointerCapture) b.setPointerCapture(e.pointerId);
+        b.classList.add('on');
+        if (navigator.vibrate) navigator.vibrate(15);
+        send(axis, dir);
+      };
+      const release = () => {
+        if (!b.classList.contains('on')) return;
+        b.classList.remove('on');
+        if (active[axis] === dir) send(axis, 0);
+      };
+      b.addEventListener('pointerdown', press);
+      b.addEventListener('pointerup', release);
+      b.addEventListener('pointercancel', release);
+      b.addEventListener('lostpointercapture', release);
+      b.addEventListener('contextmenu', (e) => e.preventDefault());
+    });
+    // Om mobilen låses eller man byter app ska bollen inte fortsätta rulla.
+    const stopAll = () => app.querySelectorAll('.lab-btn.on').forEach((b) => b.dispatchEvent(new Event('pointercancel')));
+    document.addEventListener('visibilitychange', stopAll, { once: true });
   }
 
   // Pusslet: 3 × 3 brickor, en tom. Tryck eller dra en bricka bredvid den tomma rutan.
@@ -648,6 +751,11 @@
         what = d.solved
           ? `Löst på ${(d.ms / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })} sekunder med ${d.moves} drag.`
           : `${d.correct} av 8 brickor på rätt plats.`;
+      }
+      if (r.type === 'labyrint') {
+        what = d.finished
+          ? `Ni gick i mål på ${(d.ms / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })} sekunder.`
+          : `Ni hann inte i mål. ${d.left} steg kvar.`;
       }
       if (r.type === 'king') {
         if (d.verdict === 'king') what = `Du skrev <b>${esc(d.text || '–')}</b> och ${d.same} skrev samma.`;
